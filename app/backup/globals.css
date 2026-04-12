@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --background: #07070f;
+  --foreground: #ededed;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* ── Running light border ──────────────────────── */
+@property --rota {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes border-spin {
+  to { --rota: 360deg; }
+}
+.node-border-spin {
+  animation: border-spin 3s linear infinite;
+}
+.node-border-spin-fast {
+  animation: border-spin 0.9s linear infinite;
+}
+
+/* ── Node float animations (3D spatial feel) ───── */
+@keyframes float-a {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  100% { transform: translate(12px, -16px) scale(1.035); }
+}
+@keyframes float-b {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  100% { transform: translate(-14px, 10px) scale(0.968); }
+}
+@keyframes float-c {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  100% { transform: translate(8px, 18px) scale(1.025); }
+}
+@keyframes float-d {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  100% { transform: translate(-10px, -14px) scale(1.042); }
+}
+@keyframes float-e {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  100% { transform: translate(16px, 6px) scale(0.978); }
+}
+@keyframes float-f {
+  0%   { transform: translate(0px, 0px) scale(1); }
+  100% { transform: translate(-6px, -18px) scale(1.030); }
+}
+
+/* Main nodes: slower, larger amplitude */
+.node-float-a { animation: float-a 7.4s ease-in-out infinite alternate; }
+.node-float-b { animation: float-b 9.1s ease-in-out infinite alternate; }
+.node-float-c { animation: float-c 6.8s ease-in-out infinite alternate; }
+.node-float-d { animation: float-d 10.2s ease-in-out infinite alternate; }
+.node-float-e { animation: float-e 8.0s ease-in-out infinite alternate; }
+.node-float-f { animation: float-f 7.7s ease-in-out infinite alternate; }
+
+/* Sub nodes: faster, smaller amplitude */
+.node-float-sa { animation: float-a 4.8s ease-in-out infinite alternate; }
+.node-float-sb { animation: float-b 5.6s ease-in-out infinite alternate; }
+.node-float-sc { animation: float-c 4.2s ease-in-out infinite alternate; }
+.node-float-sd { animation: float-d 6.1s ease-in-out infinite alternate; }
+.node-float-se { animation: float-e 5.0s ease-in-out infinite alternate; }
+.node-float-sf { animation: float-f 4.5s ease-in-out infinite alternate; }
+
+/* ── Search / expand pulse ─────────────────────── */
+@keyframes search-pulse {
+  0%, 100% { opacity: 0.15; transform: scale(0.93); }
+  50%       { opacity: 0.90; transform: scale(1.07); }
+}
+
+/* ── Thinking screen ───────────────────────────── */
+@keyframes orbit {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+@keyframes thinking-pulse {
+  0%, 100% { opacity: 0.25; }
+  50%       { opacity: 0.75; }
+}
+@keyframes ring-breathe {
+  0%, 100% { opacity: 0.06; transform: scale(0.97); }
+  50%       { opacity: 0.18; transform: scale(1.03); }
+}
+
+/* ── React Flow ────────────────────────────────── */
+.react-flow {
+  background: radial-gradient(ellipse at 50% 50%, #0d0d2a 0%, #07070f 65%) !important;
+}
+.react-flow__pane { cursor: default !important; }
+.react-flow__minimap { border-radius: 12px; overflow: hidden; }
+

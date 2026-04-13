@@ -3,12 +3,12 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-3.1-flash',     // 2026년 최주력 모델
-  'gemini-3.1-pro',       // 2026년 고성능 모델
-  'gemini-2.5-flash',     // 2026년 안정화 모델
-  'gemini-2.0-flash-exp', // 실험적이지만 여유 있을 수 있는 모델
-  'gemini-1.5-flash',     // 레거시 폴백 (전통의 강자)
-  'gemini-1.5-pro',
+  'gemini-3.1-pro',       // 2026 Flagship (Stable)
+  'gemini-3.1-flash-lite',// 2026 Efficiency (Stable)
+  'gemini-2.5-pro',       // 2026 Reasoning
+  'gemini-2.5-flash',     // 2026 Performance
+  'gemini-1.5-pro',       // Legacy Stable
+  'gemini-1.5-flash',
 ];
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────
@@ -16,36 +16,37 @@ let _cachedModels: string[] | null = null;
 let _blacklistedModels = new Set<string>(); // 이번 세션에서 부속/부하 발생한 모델들
 
 async function getModels(): Promise<string[]> {
-  if (_cachedModels) return _cachedModels;
+  if (_cachedModels && _cachedModels.length > 0) return _cachedModels;
 
-  try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}&pageSize=50`
-    );
-    const data = await res.json();
-    // 1. 선호하는 모델 중 가용한 것 + (목록에 없어도) 선호 모델 강제 포함 (Hail Mary)
-    const available = new Set<string>(availableModels);
-    const candidateSet = new Set<string>([...PREFERRED, ...availableModels]);
-    
-    // 사용 가능하다고 목록에 떴거나, 우리가 선호하는 모델들만 추림
-    const finalCandidates = Array.from(candidateSet).filter(m => !_blacklistedModels.has(m));
-    
-    // 우선순위 정렬: PREFERRED에 있는 순서대로, 없으면 문자열 역순(최신순)
-    _cachedModels = finalCandidates.sort((a, b) => {
-      const idxA = PREFERRED.indexOf(a);
-      const idxB = PREFERRED.indexOf(b);
-      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-      if (idxA !== -1) return -1;
-      if (idxB !== -1) return 1;
-      return b.localeCompare(a);
-    });
+  const versions = ['v1', 'v1beta'];
+  let availableSet = new Set<string>();
 
-    if (_cachedModels.length === 0) {
-      _cachedModels = ['gemini-1.5-flash'];
-    }
-  } catch {
-    _cachedModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-3.1-flash'];
+  for (const ver of versions) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${API_KEY}&pageSize=50`);
+      const data = await res.json();
+      if (data.models) {
+        data.models.forEach((m: any) => {
+          const id = m.name.replace('models/', '');
+          if (m.supportedGenerationMethods?.includes('generateContent')) {
+            availableSet.add(id);
+          }
+        });
+      }
+    } catch (e) { console.warn(`Discovery failed for ${ver}`, e); }
   }
+
+  // 선호 모델 중 실제로 목록에 있는 것들만 순서대로 추출
+  const final = PREFERRED.filter(m => availableSet.has(m));
+  
+  // 리스트에 없더라도 1.5-flash 같은 기본 모델은 무조건 백업으로 포함
+  if (!availableSet.has('gemini-1.5-flash')) availableSet.add('gemini-1.5-flash');
+  
+  // 가용한 전체 모델 중 블랙리스트 제외하고 블랙리스트 아닌 것들 추림
+  const extra = Array.from(availableSet).filter(m => !PREFERRED.includes(m) && !_blacklistedModels.has(m));
+  
+  _cachedModels = [...final, ...extra].filter(m => !_blacklistedModels.has(m));
+  if (_cachedModels.length === 0) _cachedModels = ['gemini-1.5-flash'];
 
   return _cachedModels;
 }
@@ -117,9 +118,10 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
   let lastError = '';
 
   for (const model of models) {
-    if (onStatus) onStatus(`모델 연결 시도 중: ${model}...`);
+    if (onStatus) onStatus(`연결 시도 중: ${model}...`);
     
-    for (let attempt = 0; attempt < 1; attempt++) {
+    const apiVersions = ['v1', 'v1beta']; // v1 우선 시도 (안정성)
+    for (const ver of apiVersions) {
       try {
         const payload: any = {
           contents: [{ parts: [{ text: prompt }] }],
@@ -128,13 +130,12 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
           }
         };
 
-        // JSON 지원 모드 시도 (하지만 실패하면 텍스트로 전환될 예정)
         if (model.includes('flash') || model.includes('pro')) {
           payload.generationConfig.responseMimeType = 'application/json';
         }
 
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
+          `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

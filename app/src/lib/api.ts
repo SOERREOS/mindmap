@@ -3,8 +3,11 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-1.5-flash',     // 가장 안정성이 검증된 표준 모델
-  'gemini-1.5-pro',       // 품질 위주의 프로 모델
+  'gemini-3.1-flash',     // 2026년 최신/최고속 가성비 모델
+  'gemini-3.1-pro',       // 2026년 최신 고성능 모델
+  'gemini-2.5-flash',     // 안정적인 상위 모델
+  'gemini-1.5-flash',     // 검증된 표준 모델 (레거시 폴백용)
+  'gemini-1.5-pro',
 ];
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────

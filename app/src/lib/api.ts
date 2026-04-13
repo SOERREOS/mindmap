@@ -3,10 +3,10 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-2.0-flash',     // 가장 빠르고 안정적인 최신 모델
-  'gemini-1.5-flash',     // 검증된 표준 모델
-  'gemini-1.5-pro',       // 높은 품질이 필요할 때
-  'gemini-1.5-flash-8b',  // 경량 모델
+  'gemini-1.5-flash',     // 가장 대중적이고 안정적인 표준 모델 (오류 최소화)
+  'gemini-2.0-flash',     // 최신 모델 (일부 환경에서 제한될 수 있음)
+  'gemini-1.5-pro',       // 심층 분석용
+  'gemini-1.5-flash-8b',  // 초경량 모델
 ];
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────
@@ -133,7 +133,12 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
         const { code, message } = result.error as { code: number; message: string };
         lastError = message;
 
-        if (code === 404 || code === 400) { evictModel(model); break; }
+        const isAvailabilityError = message.toLowerCase().includes('available') || message.toLowerCase().includes('deprecated');
+
+        if (code === 404 || code === 400 || code === 403 || isAvailabilityError) {
+          evictModel(model); 
+          break; 
+        }
         if (code === 429) break; // 할당량 초과 시 다음 모델로
         if (code === 503) { await sleep(1000); continue; }
         

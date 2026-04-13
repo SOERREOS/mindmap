@@ -1,7 +1,18 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ResearchSubNode, ResearchMainNode } from '@/lib/api';
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
 
 interface ResearchSidebarProps {
   node: (ResearchSubNode | ResearchMainNode) | null;
@@ -10,6 +21,7 @@ interface ResearchSidebarProps {
 }
 
 export default function ResearchSidebar({ node, onClose, userRole }: ResearchSidebarProps) {
+  const isMobile = useIsMobile();
   const [memo, setMemo] = useState('');
 
   // ESC 키로 닫기
@@ -37,29 +49,33 @@ export default function ResearchSidebar({ node, onClose, userRole }: ResearchSid
   return (
     <AnimatePresence>
       {node && (
-              <motion.div
-            initial={{ x: '100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '100%' }}
+          <motion.div
+            initial={isMobile ? { y: '100%' } : { x: '100%' }}
+            animate={isMobile ? { y: 0 } : { x: 0 }}
+            exit={isMobile ? { y: '100%' } : { x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-            className="fixed top-0 right-0 z-[101] h-screen w-[400px] bg-[#08081a]/95 backdrop-blur-[40px] border-l border-white/8 shadow-[-30px_0_60px_rgba(0,0,0,0.6)] flex flex-col"
+            className="fixed bottom-0 left-0 right-0 sm:top-0 sm:bottom-auto sm:left-auto sm:right-0 z-[101] h-[85vh] sm:h-screen w-full sm:w-[420px] bg-[#08081a]/97 backdrop-blur-[40px] border-t sm:border-t-0 sm:border-l border-white/10 shadow-[0_-20px_60px_rgba(0,0,0,0.7)] sm:shadow-[-30px_0_60px_rgba(0,0,0,0.6)] flex flex-col rounded-t-3xl sm:rounded-none"
           >
+            {/* 모바일 드래그 핸들 */}
+            <div className="sm:hidden flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-10 h-1 rounded-full bg-white/20" />
+            </div>
             {/* Header */}
-            <div className="p-8 border-b border-white/5 flex items-center justify-between">
-              <div>
-                <p className="text-[10px] tracking-[0.5em] text-white/30 uppercase mb-1">Research Data</p>
-                <h2 className="text-xl font-bold text-white tracking-wide">{node.label}</h2>
+            <div className="px-6 sm:px-8 py-5 sm:py-6 border-b border-white/5 flex items-center justify-between shrink-0">
+              <div className="flex-1 min-w-0 pr-4">
+                <p className="text-[10px] tracking-[0.4em] text-white/30 uppercase mb-1">Research Data</p>
+                <h2 className="text-lg sm:text-xl font-bold text-white tracking-wide truncate">{node.label}</h2>
               </div>
-              <button 
+              <button
                 onClick={onClose}
-                className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors text-white/40"
+                className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-white/5 transition-colors text-white/40 shrink-0"
               >
                 ✕
               </button>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-10">
+            <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-6 custom-scrollbar mobile-scroll space-y-8 sm:space-y-10">
               
               {/* Perspective Info */}
               <div className="bg-white/[0.03] rounded-2xl p-5 border border-white/5">
@@ -140,10 +156,10 @@ export default function ResearchSidebar({ node, onClose, userRole }: ResearchSid
             </div>
 
             {/* Footer */}
-            <div className="p-8 border-t border-white/5 bg-black/20">
-              <button 
+            <div className="px-6 sm:px-8 py-5 sm:py-6 border-t border-white/5 bg-black/20 safe-bottom shrink-0">
+              <button
                 onClick={onClose}
-                className="w-full py-4 rounded-full bg-white text-black font-bold text-sm tracking-widest hover:bg-white/90 transition-all uppercase"
+                className="w-full py-4 rounded-full bg-white text-black font-bold text-sm tracking-widest hover:bg-white/90 active:scale-95 transition-all uppercase"
               >
                 Keep Researching
               </button>

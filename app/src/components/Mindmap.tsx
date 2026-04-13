@@ -581,37 +581,39 @@ const MindmapContent = forwardRef<MindmapHandle, {
           nodeOrigin={[0.5, 0.5]} colorMode="dark" minZoom={0.06} maxZoom={3}
         >
           <Background color="#16162a" gap={80} size={1} />
-          <MiniMap
-            style={{ background: 'rgba(3,3,12,0.75)', border: '1px solid rgba(255,255,255,0.06)' }}
-            nodeColor={(n) => {
-              if (n.type === 'root') return '#fff';
-              if (n.type === 'oura') return 'transparent';
-              return GROUP_COLORS[(n.data?.groupIdx as number ?? 0) % GROUP_COLORS.length];
-            }}
-            maskColor="rgba(0,0,10,0.55)"
-          />
+          <div className="hidden sm:block">
+            <MiniMap
+              style={{ background: 'rgba(3,3,12,0.75)', border: '1px solid rgba(255,255,255,0.06)' }}
+              nodeColor={(n) => {
+                if (n.type === 'root') return '#fff';
+                if (n.type === 'oura') return 'transparent';
+                return GROUP_COLORS[(n.data?.groupIdx as number ?? 0) % GROUP_COLORS.length];
+              }}
+              maskColor="rgba(0,0,10,0.55)"
+            />
+          </div>
         </ReactFlow>
 
         {/* Command Input Overlay */}
         <AnimatePresence>
           {selectedId && !expandingId && selectedNode && selectedNode.type !== 'root' && (
             <motion.div
-              initial={{ opacity: 0, y: 15, x: '-50%', scale: 0.95 }}
-              animate={{ opacity: 1, y: 0, x: '-50%', scale: 1 }}
-              exit={{ opacity: 0, y: 15, x: '-50%', scale: 0.95 }}
-              className="absolute bottom-10 left-1/2 z-[200] w-[500px]"
+              initial={{ opacity: 0, y: 15, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 15, scale: 0.95 }}
+              className="absolute bottom-6 sm:bottom-10 left-3 right-3 sm:left-1/2 sm:right-auto z-[200] sm:w-[500px] sm:-translate-x-1/2"
             >
-              <div className="bg-[#0f0f23]/80 backdrop-blur-xl border border-white/10 rounded-full p-2 flex items-center shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+              <div className="bg-[#0f0f23]/90 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full p-2 flex items-center shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
                 <input
-                  autoFocus value={cmdValue}
+                  value={cmdValue}
                   onChange={(e) => setCmdValue(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Enter' && cmdValue.trim()) { handleExpand(selectedNode, cmdValue); setCmdValue(''); } }}
-                  placeholder={`${selectedNode.data.label}에 대해 [${userRole}] 관점에서 무엇을 더 찾아볼까요?`}
-                  className="flex-1 bg-transparent border-none outline-none text-white px-6 py-3 text-sm placeholder:text-white/20"
+                  placeholder={`더 탐색할 방향은?`}
+                  className="flex-1 bg-transparent border-none outline-none text-white px-4 sm:px-6 py-3 text-sm placeholder:text-white/25"
                 />
                 <button
                   onClick={() => { if (cmdValue.trim()) { handleExpand(selectedNode, cmdValue); setCmdValue(''); } }}
-                  className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full text-xs font-bold tracking-widest transition-all uppercase"
+                  className="bg-white/10 hover:bg-white/20 active:scale-95 text-white px-4 sm:px-6 py-3 rounded-xl sm:rounded-full text-xs font-bold tracking-widest transition-all uppercase shrink-0"
                 >
                   Expand
                 </button>
@@ -620,8 +622,8 @@ const MindmapContent = forwardRef<MindmapHandle, {
           )}
         </AnimatePresence>
 
-        <div className="absolute bottom-6 left-6 text-white/10 text-[10px] tracking-[0.4em] pointer-events-none uppercase">
-          드래그 연결: 아이디어 융합 · 더블클릭: 자동 확장 · 싱글클릭: 리서치 데이터
+        <div className="hidden sm:block absolute bottom-6 left-6 text-white/10 text-[10px] tracking-[0.4em] pointer-events-none uppercase">
+          더블탭: 자동 확장 · 싱글탭: 리서치 데이터
         </div>
       </div>
     </SelectCtx.Provider>

@@ -139,15 +139,20 @@ function AuthScreen({ onSuccess }: { onSuccess: () => void }) {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-      className="flex flex-col items-center justify-center h-full gap-5">
+      className="flex flex-col items-center justify-center h-full gap-5 px-6">
       <p className="text-white/18 text-[10px] tracking-[0.55em] uppercase">Restricted Access</p>
-      <motion.div animate={shake ? { x: [-10, 10, -7, 7, -4, 4, 0] } : {}} transition={{ duration: 0.42 }}>
+      <motion.div animate={shake ? { x: [-10, 10, -7, 7, -4, 4, 0] } : {}} transition={{ duration: 0.42 }}
+        className="w-full max-w-[340px]">
         <input ref={ref} type="password" value={val}
           onChange={e => { setVal(e.target.value); setError(false); }}
           onKeyDown={e => e.key === 'Enter' && submit()} placeholder="password"
-          className={`bg-white/[0.04] border rounded-full px-12 py-5 text-xl text-white outline-none transition-all w-[340px] text-center placeholder:text-white/14 tracking-[0.3em] ${error ? 'border-red-500/40' : 'border-white/10 focus:border-white/22'}`}
+          className={`bg-white/[0.04] border rounded-full px-8 py-4 text-lg text-white outline-none transition-all w-full text-center placeholder:text-white/14 tracking-[0.3em] ${error ? 'border-red-500/40' : 'border-white/10 focus:border-white/22'}`}
         />
       </motion.div>
+      <button onClick={submit}
+        className="w-full max-w-[340px] py-4 rounded-full bg-white/[0.06] border border-white/10 text-white/60 text-sm tracking-widest active:scale-95 transition-transform">
+        Enter
+      </button>
       <AnimatePresence>
         {error && (
           <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
@@ -246,32 +251,42 @@ function SavedMapsPanel({ onLoad, onClose }: { onLoad: (map: SavedMap) => void; 
 
 // ── 호버 반응형 검색창 ────────────────────────────────────────
 function InputWithHover({
-  inputRef, value, onChange, onKeyDown,
+  inputRef, value, onChange, onKeyDown, onSubmit,
 }: {
   inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onSubmit: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
-    <motion.div
-      animate={{ scale: hovered ? 1.03 : 1 }}
-      transition={{ type: 'spring', stiffness: 340, damping: 28 }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        borderRadius: '9999px',
-        boxShadow: hovered
-          ? '0 0 0 1px rgba(255,255,255,0.18), 0 0 30px rgba(255,255,255,0.06), 0 8px 40px rgba(0,0,0,0.5)'
-          : '0 0 0 1px rgba(255,255,255,0.07), 0 8px 40px rgba(0,0,0,0.4)',
-        transition: 'box-shadow 0.3s ease',
-      }}>
-      <input ref={inputRef} autoFocus value={value} onChange={onChange} onKeyDown={onKeyDown}
-        placeholder="단어를 입력하세요..."
-        className="bg-white/[0.04] border border-white/10 rounded-full px-12 py-5 text-xl text-white outline-none focus:border-white/22 transition-colors w-[440px] text-center placeholder:text-white/16"
-      />
-    </motion.div>
+    <div className="w-full max-w-[480px] px-4 flex flex-col gap-3">
+      <motion.div
+        animate={{ scale: hovered ? 1.02 : 1 }}
+        transition={{ type: 'spring', stiffness: 340, damping: 28 }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
+        style={{
+          borderRadius: '9999px',
+          boxShadow: hovered
+            ? '0 0 0 1px rgba(255,255,255,0.18), 0 0 30px rgba(255,255,255,0.06), 0 8px 40px rgba(0,0,0,0.5)'
+            : '0 0 0 1px rgba(255,255,255,0.07), 0 8px 40px rgba(0,0,0,0.4)',
+          transition: 'box-shadow 0.3s ease',
+        }}>
+        <input ref={inputRef} value={value} onChange={onChange} onKeyDown={onKeyDown}
+          placeholder="단어를 입력하세요..."
+          className="bg-white/[0.04] border border-white/10 rounded-full px-8 py-4 text-lg text-white outline-none focus:border-white/22 transition-colors w-full text-center placeholder:text-white/16"
+        />
+      </motion.div>
+      {/* 모바일 전용 검색 버튼 */}
+      <button
+        onClick={onSubmit}
+        className="sm:hidden w-full py-4 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
+      >
+        탐색하기
+      </button>
+    </div>
   );
 }
 
@@ -454,15 +469,15 @@ export default function App() {
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -20, opacity: 0 }}
-            className="absolute top-0 right-0 z-[80] p-6 flex items-center gap-3"
+            className="absolute top-0 right-0 z-[80] p-4 sm:p-6 flex items-center gap-2 sm:gap-3 safe-top"
           >
             <button onClick={handleSave}
-              className={`text-[10px] tracking-[0.3em] uppercase transition-all border rounded-full px-5 py-2 backdrop-blur-md font-bold ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
-              {saved ? 'Saved' : 'Save'}
+              className={`text-[10px] tracking-[0.2em] sm:tracking-[0.3em] uppercase transition-all border rounded-full px-4 sm:px-5 py-2 backdrop-blur-md font-bold active:scale-95 ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
+              {saved ? '✓' : 'Save'}
             </button>
             <button onClick={handleExport}
-              className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-5 py-2 backdrop-blur-md font-bold">
-              Export PNG
+              className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.2em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-4 sm:px-5 py-2 backdrop-blur-md font-bold active:scale-95 hidden sm:block">
+              Export
             </button>
           </motion.div>
         )}
@@ -475,33 +490,37 @@ export default function App() {
             <motion.div key="idle"
               initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.5 }}
-              className="flex flex-col items-center justify-center h-full gap-6">
-              <p className="text-white/18 text-[11px] tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
+              className="flex flex-col items-center justify-center h-full gap-5 px-4 safe-top safe-bottom">
+              <p className="text-white/18 text-[10px] sm:text-[11px] tracking-[0.45em] sm:tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
 
-              {/* Role Selector — centered */}
-              <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1">
-                {USER_ROLES.map(role => (
-                  <button
-                    key={role.id}
-                    onClick={() => setUserRole(role.label)}
-                    className={`px-4 py-1.5 rounded-full text-[11px] font-bold tracking-widest transition-all flex items-center gap-2 ${userRole === role.label ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
-                  >
-                    <span>{role.emoji}</span>
-                    {role.label}
-                  </button>
-                ))}
+              {/* Role Selector — 모바일: 가로 스크롤 */}
+              <div className="w-full max-w-[480px] overflow-x-auto mobile-scroll px-4">
+                <div className="flex items-center gap-1.5 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1 min-w-max mx-auto w-fit">
+                  {USER_ROLES.map(role => (
+                    <button
+                      key={role.id}
+                      onClick={() => setUserRole(role.label)}
+                      className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider sm:tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap ${userRole === role.label ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
+                    >
+                      <span>{role.emoji}</span>
+                      {role.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <InputWithHover inputRef={inputRef} value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submit()} />
-              <div className="flex items-center gap-6">
+                onKeyDown={e => e.key === 'Enter' && submit()}
+                onSubmit={submit} />
+
+              <div className="flex items-center gap-3 sm:gap-6">
                 <button onClick={handleLoadFromFile}
-                  className="text-white/30 hover:text-white/70 text-[11px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-8 py-3 backdrop-blur-md">
-                  Open Project
+                  className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
+                  Open
                 </button>
                 <button onClick={() => setShowSaved(true)}
-                  className="text-white/30 hover:text-white/70 text-[11px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-8 py-3 backdrop-blur-md">
+                  className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
                   History
                 </button>
               </div>
@@ -530,9 +549,9 @@ export default function App() {
                 userRole={userRole}
                 onSelectNode={(node: any) => setSelectedNodeData(node)}
               />
-              <div className="absolute top-6 left-6">
+              <div className="absolute top-4 sm:top-6 left-4 sm:left-6 safe-top">
                 <button onClick={reset}
-                  className="text-white/22 hover:text-white/60 text-[10px] tracking-[0.4em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-6 py-2.5 backdrop-blur-md font-bold">
+                  className="text-white/22 hover:text-white/60 text-[10px] tracking-[0.3em] sm:tracking-[0.4em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-5 sm:px-6 py-2.5 backdrop-blur-md font-bold active:scale-95">
                   ← Back
                 </button>
               </div>

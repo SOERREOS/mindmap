@@ -6,7 +6,7 @@ import Mindmap, { type MindmapHandle } from '@/components/Mindmap';
 import StarField from '@/components/StarField';
 import ResearchSidebar from '@/components/ResearchSidebar';
 import { conductResearch, ResearchMainNode, ResearchSubNode } from '@/lib/api';
-import { initAuth, verify, changePassword, isAuth, setAuth } from '@/lib/auth';
+import { initAuth, verify, changePassword, isAuth, setAuth, generateOTP, redeemOTP } from '@/lib/auth';
 import { rollDice } from '@/lib/dice';
 import { deleteMap, formatDate, loadMaps, saveMap, type SavedMap } from '@/lib/storage';
 import type { Edge, Node } from '@xyflow/react';
@@ -120,43 +120,150 @@ function ThinkingScreen({ message }: { message?: string }) {
   );
 }
 
-// ── 비밀번호 화면 ─────────────────────────────────────────────
+// ── 비밀번호 / 게스트 코드 화면 ───────────────────────────────
 function AuthScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [tab, setTab] = useState<'admin' | 'guest'>('admin');
+
+  // 관리자 탭
   const [val, setVal] = useState('');
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
   const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { ref.current?.focus(); }, []);
 
-  const submit = async () => {
+  // 게스트 탭
+  const [guestCode, setGuestCode] = useState('');
+  const [guestError, setGuestError] = useState('');
+  const [guestLoading, setGuestLoading] = useState(false);
+  const guestRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (tab === 'admin') ref.current?.focus();
+    else guestRef.current?.focus();
+  }, [tab]);
+
+  const submitAdmin = async () => {
     if (!val.trim()) return;
     const ok = await verify(val);
     if (ok) { setAuth(); onSuccess(); }
     else { setError(true); setShake(true); setVal(''); setTimeout(() => { setShake(false); ref.current?.focus(); }, 500); }
   };
 
+  const submitGuest = async () => {
+    const code = guestCode.trim();
+    if (!code) return;
+    setGuestLoading(true);
+    setGuestError('');
+    const ok = await redeemOTP(code);
+    setGuestLoading(false);
+    if (ok) { setAuth(); onSuccess(); }
+    else { setGuestError('유효하지 않거나 이미 사용된 코드입니다'); setGuestCode(''); guestRef.current?.focus(); }
+  };
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       className="flex flex-col items-center justify-center h-full gap-5 px-6">
-      <p className="text-white/18 text-[10px] tracking-[0.55em] uppercase">Restricted Access</p>
-      <motion.div animate={shake ? { x: [-10, 10, -7, 7, -4, 4, 0] } : {}} transition={{ duration: 0.42 }}
-        className="w-full max-w-[340px]">
-        <input ref={ref} type="password" value={val}
-          onChange={e => { setVal(e.target.value); setError(false); }}
-          onKeyDown={e => e.key === 'Enter' && submit()} placeholder="password"
-          className={`bg-white/[0.04] border rounded-full px-8 py-4 text-lg text-white outline-none transition-all w-full text-center placeholder:text-white/14 tracking-[0.3em] ${error ? 'border-red-500/40' : 'border-white/10 focus:border-white/22'}`}
-        />
-      </motion.div>
-      <button onClick={submit}
-        className="w-full max-w-[340px] py-4 rounded-full bg-white/[0.06] border border-white/10 text-white/60 text-sm tracking-widest active:scale-95 transition-transform">
-        Enter
-      </button>
-      <AnimatePresence>
-        {error && (
-          <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="text-red-400/50 text-xs tracking-[0.2em]">잘못된 비밀번호</motion.p>
+
+      {/* 탭 전환 */}
+      <div className="flex items-center gap-1 bg-white/[0.03] border border-white/5 rounded-full p-1">
+        <button
+          onClick={() => { setTab('admin'); setError(false); }}
+          className={`px-5 py-1.5 rounded-full text-[11px] font-bold tracking-widest transition-all ${tab === 'admin' ? 'bg-white text-black' : 'text-white/30 hover:text-white/60'}`}>
+          관리자
+        </button>
+        <button
+          onClick={() => { setTab('guest'); setGuestError(''); }}
+          className={`px-5 py-1.5 rounded-full text-[11px] font-bold tracking-widest transition-all ${tab === 'guest' ? 'bg-white text-black' : 'text-white/30 hover:text-white/60'}`}>
+          게스트 코드
+        </button>
+      </div>
+
+      <AnimatePresence mode="wait">
+        {tab === 'admin' ? (
+          <motion.div key="admin" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            className="flex flex-col items-center gap-4 w-full max-w-[340px]">
+            <motion.div animate={shake ? { x: [-10, 10, -7, 7, -4, 4, 0] } : {}} transition={{ duration: 0.42 }} className="w-full">
+              <input ref={ref} type="password" value={val}
+                onChange={e => { setVal(e.target.value); setError(false); }}
+                onKeyDown={e => e.key === 'Enter' && submitAdmin()} placeholder="password"
+                className={`bg-white/[0.04] border rounded-full px-8 py-4 text-lg text-white outline-none transition-all w-full text-center placeholder:text-white/14 tracking-[0.3em] ${error ? 'border-red-500/40' : 'border-white/10 focus:border-white/22'}`}
+              />
+            </motion.div>
+            <button onClick={submitAdmin}
+              className="w-full py-4 rounded-full bg-white/[0.06] border border-white/10 text-white/60 text-sm tracking-widest active:scale-95 transition-transform">
+              Enter
+            </button>
+            <AnimatePresence>
+              {error && (
+                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="text-red-400/50 text-xs tracking-[0.2em]">잘못된 비밀번호</motion.p>
+              )}
+            </AnimatePresence>
+          </motion.div>
+        ) : (
+          <motion.div key="guest" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }}
+            className="flex flex-col items-center gap-4 w-full max-w-[340px]">
+            <p className="text-white/20 text-[11px] tracking-[0.3em]">발급받은 코드를 입력하세요</p>
+            <input ref={guestRef} value={guestCode}
+              onChange={e => { setGuestCode(e.target.value.toUpperCase()); setGuestError(''); }}
+              onKeyDown={e => e.key === 'Enter' && submitGuest()} placeholder="XXXXXXXX"
+              maxLength={8}
+              className="bg-white/[0.04] border border-white/10 focus:border-white/22 rounded-full px-8 py-4 text-lg text-white outline-none transition-all w-full text-center placeholder:text-white/14 tracking-[0.5em] font-mono"
+            />
+            <button onClick={submitGuest} disabled={guestLoading}
+              className="w-full py-4 rounded-full bg-white/[0.06] border border-white/10 text-white/60 text-sm tracking-widest active:scale-95 transition-all disabled:opacity-40">
+              {guestLoading ? '확인 중...' : '입장'}
+            </button>
+            <AnimatePresence>
+              {guestError && (
+                <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  className="text-red-400/50 text-xs tracking-[0.2em] text-center">{guestError}</motion.p>
+              )}
+            </AnimatePresence>
+          </motion.div>
         )}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ── OTP 발급 결과 모달 ────────────────────────────────────────
+function OtpModal({ code, expiresIn, onClose }: { code: string; expiresIn: string; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="absolute inset-0 z-50 flex items-center justify-center px-6"
+      style={{ background: 'rgba(5,5,14,0.92)', backdropFilter: 'blur(24px)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.92, opacity: 0 }}
+        className="flex flex-col items-center gap-6 w-full max-w-[340px]">
+        <p className="text-white/25 text-[10px] tracking-[0.55em] uppercase">Guest Code Issued</p>
+
+        {/* 코드 표시 */}
+        <button onClick={copy}
+          className="w-full bg-white/[0.05] border border-white/12 rounded-2xl px-8 py-6 flex flex-col items-center gap-2 hover:bg-white/[0.08] active:scale-95 transition-all group">
+          <span className="font-mono text-3xl font-bold tracking-[0.4em] text-white">{code}</span>
+          <span className="text-white/25 text-[10px] tracking-widest">
+            {copied ? '✓ 복사됨' : '탭해서 복사'}
+          </span>
+        </button>
+
+        <div className="flex flex-col items-center gap-1 text-center">
+          <p className="text-white/30 text-[11px] tracking-wider">유효 기간: <span className="text-white/60">{expiresIn}</span></p>
+          <p className="text-white/18 text-[10px] tracking-wider">1회 사용 후 자동 만료됩니다</p>
+        </div>
+
+        <button onClick={onClose}
+          className="text-white/20 hover:text-white/50 text-xs tracking-widest transition-colors">
+          닫기
+        </button>
+      </motion.div>
     </motion.div>
   );
 }
@@ -301,6 +408,8 @@ export default function App() {
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [otpResult, setOtpResult] = useState<{ code: string; expiresIn: string } | null>(null);
+  const [otpLoading, setOtpLoading] = useState(false);
   const [exportMode, setExportMode] = useState(false);
   // --- New Creative Features State ---
   const [userRole, setUserRole] = useState(USER_ROLES[0].label);
@@ -338,6 +447,14 @@ export default function App() {
     if (!kw) return;
     setInputValue('');
     if (kw === '/reos') { setShowPwdModal(true); return; }
+    if (kw === '/otp') {
+      setOtpLoading(true);
+      const result = await generateOTP();
+      setOtpLoading(false);
+      if (result) setOtpResult(result);
+      else alert('코드 발급 실패. 관리자 비밀번호 또는 서버 설정을 확인하세요.');
+      return;
+    }
     if (kw === '영감 주사위') { setStatus('dice'); return; }
     await runResearch(kw);
   };
@@ -652,6 +769,20 @@ export default function App() {
         {showPwdModal && <PasswordModal onClose={() => { setShowPwdModal(false); setTimeout(() => inputRef.current?.focus(), 80); }} />}
         {showSaved && (
           <SavedMapsPanel onLoad={handleLoadFromStorage} onClose={() => setShowSaved(false)} />
+        )}
+        {otpResult && (
+          <OtpModal code={otpResult.code} expiresIn={otpResult.expiresIn} onClose={() => { setOtpResult(null); setTimeout(() => inputRef.current?.focus(), 80); }} />
+        )}
+      </AnimatePresence>
+
+      {/* OTP 발급 로딩 */}
+      <AnimatePresence>
+        {otpLoading && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center"
+            style={{ background: 'rgba(5,5,14,0.7)', backdropFilter: 'blur(12px)' }}>
+            <p className="text-white/40 text-[11px] tracking-[0.5em] uppercase">코드 생성 중...</p>
+          </motion.div>
         )}
       </AnimatePresence>
     </main>

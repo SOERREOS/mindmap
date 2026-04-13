@@ -35,3 +35,35 @@ export function isAuth(): boolean {
 export function setAuth(): void {
   sessionStorage.setItem(SESSION_KEY, '1');
 }
+
+// ── OTP (게스트 1회용 코드) ───────────────────────────────────
+
+export async function generateOTP(): Promise<{ code: string; expiresIn: string } | null> {
+  try {
+    const stored = localStorage.getItem(PWD_KEY);
+    if (!stored) return null;
+    const res = await fetch('/api/otp/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adminHash: stored }),
+    });
+    if (!res.ok) return null;
+    return res.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function redeemOTP(code: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/otp/redeem', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json();
+    return data.valid === true;
+  } catch {
+    return false;
+  }
+}

@@ -3,10 +3,11 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-3.1-flash',     // 2026년 최신/최고속 가성비 모델
-  'gemini-3.1-pro',       // 2026년 최신 고성능 모델
-  'gemini-2.5-flash',     // 안정적인 상위 모델
-  'gemini-1.5-flash',     // 검증된 표준 모델 (레거시 폴백용)
+  'gemini-3.1-flash',     // 2026년 최주력 모델
+  'gemini-3.1-pro',       // 2026년 고성능 모델
+  'gemini-2.5-flash',     // 2026년 안정화 모델
+  'gemini-2.0-flash-exp', // 실험적이지만 여유 있을 수 있는 모델
+  'gemini-1.5-flash',     // 레거시 폴백 (전통의 강자)
   'gemini-1.5-pro',
 ];
 
@@ -177,6 +178,26 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
         break;
       }
     }
+  }
+
+  // [최종 최후의 수단] 모든 모델이 실패했으나 부하(503/429) 문제일 경우, 3초 대기 후 마지막 1번 더 시도
+  if (lastError.includes('503') || lastError.includes('429') || lastError.includes('demand')) {
+    await sleep(3000);
+    const lastResortModel = models[0];
+    try {
+      const retryRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${lastResortModel}:generateContent?key=${API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        }
+      );
+      const retryJson = await retryRes.json();
+      if (!retryJson.error) {
+        return parseFirstJSON(retryJson.candidates[0].content.parts[0].text);
+      }
+    } catch { /* ignore */ }
   }
 
   throw new Error(`AI 탐색 중 오류가 발생했습니다. (${lastError})`);

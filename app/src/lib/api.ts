@@ -13,6 +13,7 @@ const PREFERRED = [
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────
 let _cachedModels: string[] | null = null;
+let _blacklistedModels = new Set<string>(); // 이번 세션에서 부속/부하 발생한 모델들
 
 async function getModels(): Promise<string[]> {
   if (_cachedModels) return _cachedModels;
@@ -22,38 +23,36 @@ async function getModels(): Promise<string[]> {
       `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}&pageSize=50`
     );
     const data = await res.json();
-    const availableModels = (data.models ?? [])
-      .filter((m: any) =>
-        Array.isArray(m.supportedGenerationMethods) &&
-        m.supportedGenerationMethods.includes('generateContent')
-      )
-      .map((m: any) => (m.name as string).replace('models/', ''));
-
+    // 1. 선호하는 모델 중 가용한 것 + (목록에 없어도) 선호 모델 강제 포함 (Hail Mary)
     const available = new Set<string>(availableModels);
+    const candidateSet = new Set<string>([...PREFERRED, ...availableModels]);
     
-    // 1. 선호하는 모델 중 실제 사용 가능한 것 필터링
-    const filtered = PREFERRED.filter(m => available.has(m));
+    // 사용 가능하다고 목록에 떴거나, 우리가 선호하는 모델들만 추림
+    const finalCandidates = Array.from(candidateSet).filter(m => !_blacklistedModels.has(m));
     
-    if (filtered.length > 0) {
-      _cachedModels = filtered;
-    } else if (availableModels.length > 0) {
-      // 2. 선호 모델이 하나도 없다면 리스트 전체를 대상 (가장 안정적인 순으로 대략 정렬)
-      _cachedModels = availableModels.sort((a, b) => b.localeCompare(a));
-    } else {
-      _cachedModels = ['gemini-1.5-flash']; // 진짜 아무것도 없는 경우
+    // 우선순위 정렬: PREFERRED에 있는 순서대로, 없으면 문자열 역순(최신순)
+    _cachedModels = finalCandidates.sort((a, b) => {
+      const idxA = PREFERRED.indexOf(a);
+      const idxB = PREFERRED.indexOf(b);
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+      if (idxA !== -1) return -1;
+      if (idxB !== -1) return 1;
+      return b.localeCompare(a);
+    });
+
+    if (_cachedModels.length === 0) {
+      _cachedModels = ['gemini-1.5-flash'];
     }
   } catch {
-    _cachedModels = ['gemini-1.5-flash'];
+    _cachedModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-3.1-flash'];
   }
 
   return _cachedModels;
 }
 
-// 특정 모델이 "사용 불가" 에러를 낼 때 캐시에서 제거
 function evictModel(model: string) {
-  if (_cachedModels) {
-    _cachedModels = _cachedModels.filter(m => m !== model);
-  }
+  _blacklistedModels.add(model);
+  _cachedModels = (_cachedModels || []).filter(m => m !== model);
 }
 
 export interface ResearchSubNode {
@@ -105,7 +104,7 @@ function parseFirstJSON(raw: string): any {
 }
 
 // ── Gemini API 호출 (딥모드 지원 및 폴백 로직) ──────────────────────
-const callGemini = async (prompt: string, deep = false): Promise<any> => {
+const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string) => void): Promise<any> => {
   let models = await getModels();
   
   // 딥모드일 경우 Pro 모델을 최우선순위로 배치
@@ -118,6 +117,8 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
   let lastError = '';
 
   for (const model of models) {
+    if (onStatus) onStatus(`모델 연결 시도 중: ${model}...`);
+    
     for (let attempt = 0; attempt < 1; attempt++) {
       try {
         const payload: any = {
@@ -165,12 +166,18 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
 
           if (code === 404 || code === 400 || code === 403 || message.toLowerCase().includes('available')) {
             evictModel(model);
+            if (onStatus) onStatus(`${model} 가용 불가. 모델 교체 중...`);
             break;
           }
-          if (code === 429 || code === 503) break; // 할당량 초과나 서버 부하 시 즉시 다음 모델로 우회
+          if (code === 429 || code === 503) {
+            evictModel(model);
+            if (onStatus) onStatus(`${model} 부하 발생. 대체 엔진으로 우회합니다...`);
+            break;
+          }
           continue;
         }
 
+        if (onStatus) onStatus(`분석 완료! 데이터를 구조화하는 중...`);
         const raw: string = result.candidates[0].content.parts[0].text;
         return parseFirstJSON(raw);
       } catch (e: any) {
@@ -208,7 +215,11 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
 /**
  * 초기 리서치 수행
  */
-export const conductResearch = async (keyword: string, userRole = "사용자"): Promise<ResearchMainNode[]> => {
+export const conductResearch = async (
+  keyword: string, 
+  userRole = "사용자", 
+  onStatus?: (msg: string) => void
+): Promise<ResearchMainNode[]> => {
   const seeds = keyword.split(',').map(s => s.trim()).filter(Boolean);
   const subject = seeds.length > 1
     ? `"${seeds.join('"과 "')}"의 교차 연관 관계`
@@ -238,7 +249,7 @@ export const conductResearch = async (keyword: string, userRole = "사용자"): 
   ]
 }`;
 
-  const parsed = await callGemini(prompt, true); // 초기 리서치는 Pro 가중치
+  const parsed = await callGemini(prompt, true, onStatus); // 초기 리서치는 Pro 가중치
   return parsed.nodes;
 };
 

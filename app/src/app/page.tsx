@@ -72,7 +72,7 @@ function DiceAnimation({ onComplete }: { onComplete: (topic: string) => void }) 
 }
 
 // ── 탐색 중 시각 화면 ─────────────────────────────────────────
-function ThinkingScreen() {
+function ThinkingScreen({ message }: { message?: string }) {
   return (
     <motion.div key="thinking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       className="flex flex-col items-center justify-center h-full gap-10">
@@ -100,9 +100,24 @@ function ThinkingScreen() {
             style={{ filter: 'drop-shadow(0 0 10px rgba(255,255,255,0.9))', animation: 'ring-breathe 1.6s ease-in-out infinite' }} />
         </svg>
       </div>
-      <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', letterSpacing: '0.55em', textTransform: 'uppercase', animation: 'thinking-pulse 2.2s ease-in-out infinite' }}>
-        AI 탐색 중
-      </p>
+      <div className="flex flex-col items-center gap-4">
+        <p style={{ color: 'rgba(255,255,255,0.35)', fontSize: '12px', letterSpacing: '0.55em', textTransform: 'uppercase', animation: 'thinking-pulse 2.2s ease-in-out infinite' }}>
+          AI 탐색 중
+        </p>
+        <AnimatePresence mode="wait">
+          {message && (
+            <motion.p 
+              key={message}
+              initial={{ opacity: 0, y: 5 }} 
+              animate={{ opacity: 1, y: 0 }} 
+              exit={{ opacity: 0, y: -5 }}
+              className="text-[#c084fc]/50 text-[10px] tracking-[0.2em] font-medium"
+            >
+              {message}
+            </motion.p>
+          )}
+        </AnimatePresence>
+      </div>
     </motion.div>
   );
 }
@@ -277,6 +292,7 @@ export default function App() {
   // --- New Creative Features State ---
   const [userRole, setUserRole] = useState(USER_ROLES[0].label);
   const [selectedNodeData, setSelectedNodeData] = useState<(ResearchSubNode | ResearchMainNode) | null>(null);
+  const [aiMessage, setAiMessage] = useState('');
   // ----------------------------------
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -289,9 +305,10 @@ export default function App() {
   const runResearch = async (kw: string) => {
     setSavedMapState(null);
     setStatus('thinking');
+    setAiMessage('가장 적합한 지능형 엔진을 찾는 중..');
     setSelectedNodeData(null);
     try {
-      const results = await conductResearch(kw, userRole);
+      const results = await conductResearch(kw, userRole, (msg) => setAiMessage(msg));
       setData({ root: kw, children: results });
       setStatus('mapping');
     } catch (err) {
@@ -503,7 +520,7 @@ export default function App() {
             </motion.div>
           )}
 
-          {status === 'thinking' && <ThinkingScreen />}
+          {status === 'thinking' && <ThinkingScreen message={aiMessage} />}
 
           {status === 'mapping' && data && (
             <motion.div key="mapping"

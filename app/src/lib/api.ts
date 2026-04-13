@@ -3,12 +3,12 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-3.1-pro',       // 2026 Flagship (Stable)
-  'gemini-3.1-flash-lite',// 2026 Efficiency (Stable)
-  'gemini-2.5-pro',       // 2026 Reasoning
-  'gemini-2.5-flash',     // 2026 Performance
-  'gemini-1.5-pro',       // Legacy Stable
-  'gemini-1.5-flash',
+  'gemini-1.5-flash',     // 초안정성 1순위 (부하 적음)
+  'gemini-1.5-pro',       // 안정성 2순위
+  'gemini-3.1-flash-lite',// 최신 성능 백업
+  'gemini-3.1-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
 ];
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────
@@ -130,7 +130,8 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
           }
         };
 
-        if (model.includes('flash') || model.includes('pro')) {
+        // v1beta에서만 responseMimeType 사용 (v1에서는 간혹 400 유발)
+        if (ver === 'v1beta' && (model.includes('flash') || model.includes('pro'))) {
           payload.generationConfig.responseMimeType = 'application/json';
         }
 
@@ -188,13 +189,13 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
     }
   }
 
-  // [최종 최후의 수단] 모든 모델이 실패했으나 부하(503/429) 문제일 경우, 3초 대기 후 마지막 1번 더 시도
+  // [최종 생존 장치] 모든 시도가 부하로 실패했다면, 3초 대기 후 가장 튼튼한 1.5-flash로 마지막 시도
   if (lastError.includes('503') || lastError.includes('429') || lastError.includes('demand')) {
+    if (onStatus) onStatus(`서버 혼잡도가 높습니다. 3초 후 최후의 수단(Long-Retry)을 실행합니다...`);
     await sleep(3000);
-    const lastResortModel = models[0];
     try {
       const retryRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${lastResortModel}:generateContent?key=${API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

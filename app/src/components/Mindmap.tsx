@@ -339,7 +339,7 @@ function buildGraph(rootLabel: string, data: ResearchMainNode[]) {
 
     nodes.push({
       id: mainId, type: 'main',
-      data: { label: main.label, category: main.category, summary: main.summary, depth, groupIdx: i, floatClass: MAIN_FLOATS[i % MAIN_FLOATS.length] },
+      data: { label: main.label, category: main.category, summary: main.summary, inspiration: main.inspiration, actionItems: main.actionItems, questions: main.questions, details: main.details, depth, groupIdx: i, floatClass: MAIN_FLOATS[i % MAIN_FLOATS.length] },
       position: { x: mx, y: my }, zIndex: Math.round(depth * 100),
     });
 
@@ -359,7 +359,7 @@ function buildGraph(rootLabel: string, data: ResearchMainNode[]) {
 
       nodes.push({
         id: subId, type: 'sub',
-        data: { label: sub.label, summary: sub.summary, depth: subDepth, groupIdx: i, floatClass: SUB_FLOATS[(i * 5 + j) % SUB_FLOATS.length] },
+        data: { ...sub, depth: subDepth, groupIdx: i, floatClass: SUB_FLOATS[(i * 5 + j) % SUB_FLOATS.length] },
         position: { x: sx, y: sy }, zIndex: Math.round(subDepth * 60),
       });
 
@@ -554,6 +554,34 @@ const MindmapContent = forwardRef<MindmapHandle, {
   }, [userRole, setNodes, setEdges, fitView]);
 
   // ── 클릭 핸들러 ──────────────────────────────────────────────
+  const handleNodeClick: NodeMouseHandler = useCallback((_, node) => {
+    if (node.type === 'oura') return;
+
+    if (lastClickRef.current === node.id && clickTimerRef.current) {
+      // 더블클릭: 확장
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+      lastClickRef.current = null;
+      handleExpand(node);
+      return;
+    }
+
+    lastClickRef.current = node.id;
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+    clickTimerRef.current = setTimeout(() => {
+      clickTimerRef.current = null;
+      lastClickRef.current = null;
+      if (selectedIdRef.current === node.id) {
+        setSelectedId(null);
+        onSelectNode(null);
+      } else {
+        setSelectedId(node.id);
+        setCenter(node.position.x, node.position.y, { duration: 650, zoom: 1.55 });
+        if (node.type !== 'root') onSelectNode(node.data as any);
+      }
+    }, 260);
+  }, [handleExpand, setCenter, onSelectNode]);
+
   const selectedNode = nodes.find(n => n.id === selectedId);
 
   return (

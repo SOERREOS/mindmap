@@ -479,7 +479,12 @@ const MindmapContent = forwardRef<MindmapHandle, {
     const targetNode = nodesRef.current.find(n => n.id === params.target);
     if (!sourceNode || !targetNode) return;
 
-    const newEdge = { ...params, id: `bridge-${params.source}-${params.target}-${Date.now()}`, type: 'particle', style: { stroke: '#ffffff', strokeWidth: 2, opacity: 0.6 } };
+    const newEdge = { 
+      ...params, 
+      id: `bridge-${params.source}-${params.target}-${Date.now()}`, 
+      type: 'particle', 
+      style: { stroke: '#ffffff', strokeWidth: 2, opacity: 0.6 } 
+    } as Edge;
     setEdges(prev => { const upd = addEdge(newEdge, prev); originalEdgesRef.current = upd; return upd; });
     
     setExpandingId(params.source);
@@ -495,7 +500,13 @@ const MindmapContent = forwardRef<MindmapHandle, {
       }));
 
       setNodes(prev => [...prev, ...spreadNodes(newNodes, prev)]);
-      const bEdges: Edge[] = newNodes.map(bn => ({ id: `be-${bn.id}`, source: params.source, target: bn.id, type: 'particle', style: { stroke: '#4dd0e1', opacity: 0.3 } }));
+      const bEdges: Edge[] = newNodes.map(bn => ({ 
+        id: `be-${bn.id}`, 
+        source: params.source!, 
+        target: bn.id, 
+        type: 'particle', 
+        style: { stroke: '#4dd0e1', opacity: 0.3 } 
+      } as Edge));
       setEdges(prev => { const upd = [...prev, ...bEdges]; originalEdgesRef.current = upd; return upd; });
     } finally { setExpandingId(null); }
   }, [userRole, setNodes, setEdges]);

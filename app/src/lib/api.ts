@@ -29,10 +29,10 @@ async function getModels(): Promise<string[]> {
         .map((m: any) => (m.name as string).replace('models/', ''))
     );
     const filtered = PREFERRED.filter(m => available.has(m));
-    _cachedModels = filtered.length > 0 ? filtered : ['gemini-2.5-flash'];
+    _cachedModels = filtered.length > 0 ? filtered : ['gemini-1.5-flash'];
   } catch {
-    // 네트워크 오류 등 → 기본 모델로
-    _cachedModels = ['gemini-2.5-flash', 'gemini-2.5-pro'];
+    // 네트워크 오류 등 → 가장 안전하고 검증된 모델로 폴백
+    _cachedModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
   }
 
   return _cachedModels;

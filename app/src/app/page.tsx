@@ -16,8 +16,6 @@ const USER_ROLES = [
   { id: 'designer', label: '디자이너', emoji: '🎨' },
   { id: 'marketer', label: '마케터', emoji: '📈' },
   { id: 'writer', label: '작가', emoji: '✍️' },
-  { id: 'engineer', label: '엔지니어', emoji: '⚙️' },
-  { id: 'researcher', label: '연구원', emoji: '🔬' },
 ];
 
 // ── 해킹 주사위 ───────────────────────────────────────────────

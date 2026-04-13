@@ -273,6 +273,7 @@ export default function App() {
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [exportMode, setExportMode] = useState(false);
   // --- New Creative Features State ---
   const [userRole, setUserRole] = useState(USER_ROLES[0].label);
   const [selectedNodeData, setSelectedNodeData] = useState<(ResearchSubNode | ResearchMainNode) | null>(null);

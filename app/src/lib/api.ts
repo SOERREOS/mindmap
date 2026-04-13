@@ -15,7 +15,7 @@ async function getModels(): Promise<string[]> {
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models?key=${API_KEY}&pageSize=50`
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}&pageSize=50`
     );
     const data = await res.json();
     const availableModels = (data.models ?? [])
@@ -33,13 +33,10 @@ async function getModels(): Promise<string[]> {
     if (filtered.length > 0) {
       _cachedModels = filtered;
     } else if (availableModels.length > 0) {
-      // 2. 선호 모델이 하나도 없다면, 리스트에서 아무 'flash'나 'pro'가 포함된 모델 선택
-      _cachedModels = availableModels
-        .filter(m => m.includes('flash') || m.includes('pro'))
-        .slice(0, 3);
-      if (_cachedModels.length === 0) _cachedModels = [availableModels[0]];
+      // 2. 선호 모델이 하나도 없다면 리스트 전체를 대상 (가장 안정적인 순으로 대략 정렬)
+      _cachedModels = availableModels.sort((a, b) => b.localeCompare(a));
     } else {
-      _cachedModels = ['gemini-1.5-flash']; // 최후의 보루
+      _cachedModels = ['gemini-1.5-flash']; // 진짜 아무것도 없는 경우
     }
   } catch {
     _cachedModels = ['gemini-1.5-flash'];
@@ -119,40 +116,59 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
   for (const model of models) {
     for (let attempt = 0; attempt < 1; attempt++) {
       try {
+        const payload: any = {
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: deep ? 0.75 : 0.9,
+          }
+        };
+
+        // JSON 지원 모드 시도 (하지만 실패하면 텍스트로 전환될 예정)
+        if (model.includes('flash') || model.includes('pro')) {
+          payload.generationConfig.responseMimeType = 'application/json';
+        }
+
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { 
-                responseMimeType: 'application/json',
-                temperature: deep ? 0.75 : 0.9, // 딥모드는 약간 더 창의적이게
-              },
-            }),
+            body: JSON.stringify(payload),
           }
         );
         const result = await response.json();
 
-        if (!result.error) {
-          const raw: string = result.candidates[0].content.parts[0].text;
-          return parseFirstJSON(raw);
+        if (result.error) {
+          const { code, message } = result.error;
+          lastError = message;
+
+          // 만약 필드명 에러(400)가 나면 JSON 모드 없이 텍스트로만 다시 시도
+          if (code === 400 && message.includes('responseMimeType')) {
+            delete payload.generationConfig.responseMimeType;
+            const retryRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
+              {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              }
+            );
+            const retryJson = await retryRes.json();
+            if (!retryJson.error) {
+              return parseFirstJSON(retryJson.candidates[0].content.parts[0].text);
+            }
+          }
+
+          if (code === 404 || code === 400 || code === 403 || message.toLowerCase().includes('available')) {
+            evictModel(model);
+            break;
+          }
+          if (code === 429) break;
+          continue;
         }
 
-        const { code, message } = result.error as { code: number; message: string };
-        lastError = message;
-
-        const isAvailabilityError = message.toLowerCase().includes('available') || message.toLowerCase().includes('deprecated');
-
-        if (code === 404 || code === 400 || code === 403 || isAvailabilityError) {
-          evictModel(model); 
-          break; 
-        }
-        if (code === 429) break; // 할당량 초과 시 다음 모델로
-        if (code === 503) { await sleep(1000); continue; }
-        
-        break;
+        const raw: string = result.candidates[0].content.parts[0].text;
+        return parseFirstJSON(raw);
       } catch (e: any) {
         lastError = e.message;
         break;

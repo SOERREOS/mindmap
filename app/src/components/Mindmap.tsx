@@ -92,17 +92,14 @@ function OuraNode({ data }: { data: any }) {
 
 // ── 루트 노드 (고정) ───────────────────────────────────────────
 function RootNode({ data, id }: { data: any; id: string }) {
-  const { selectedId, exportMode } = useContext(SelectCtx);
-  const isFaded = !exportMode && selectedId !== null && selectedId !== id;
+  const { exportMode } = useContext(SelectCtx);
   return (
     <div style={{
       background: 'rgba(255,255,255,0.96)', color: '#000',
       borderRadius: '60px', padding: '20px 56px',
       fontWeight: 900, fontSize: '28px', letterSpacing: '0.08em',
       boxShadow: '0 0 80px rgba(255,255,255,0.45), 0 0 200px rgba(255,255,255,0.15)',
-      opacity: isFaded ? 0.12 : 1,
-      filter: isFaded ? 'blur(3px)' : 'none',
-      transition: 'opacity 0.6s ease, filter 0.6s ease',
+      opacity: 1,
       whiteSpace: 'nowrap', userSelect: 'none', cursor: 'default',
     }}>
       {data.label}
@@ -121,18 +118,13 @@ function MainNode({ data, id }: { data: any; id: string }) {
   const d: number = data.depth ?? 0.8;
 
   const isSel = selectedId === id;
-  const selGroup = selectedId ? getGroup(selectedId) : -1;
-  const isSameGroup = !isSel && selGroup === data.groupIdx;
-  const isFaded = !exportMode && selectedId !== null && !isSel && !isSameGroup;
   const isExpanding = expandingId === id;
 
   let scale = 0.86 + d * 0.14;
   if (isSel) scale = 1.15;
-  else if (isFaded) scale = (0.86 + d * 0.14) * 0.5;
   if (hov && !isSel) scale *= 1.07;
 
-  const op = exportMode ? 1 : isSel ? 1 : isFaded ? 0.07 : 0.93;
-  const blurPx = exportMode ? 0 : isFaded ? 5 : 0;
+  const op = exportMode ? 1 : 0.93;
   const floatClass = (data.floatClass as string) ?? '';
 
   return (
@@ -143,8 +135,7 @@ function MainNode({ data, id }: { data: any; id: string }) {
         style={{
           position: 'absolute', inset: '-2px', borderRadius: '30px', pointerEvents: 'none',
           background: `conic-gradient(from var(--rota, 0deg), transparent 0%, rgba(${c},${isExpanding ? 1 : isSel ? 0.9 : 0.65}) 9%, transparent 24%)`,
-          opacity: isFaded ? 0 : 1,
-          transition: 'opacity 0.5s ease',
+          opacity: 1,
         }}
       />
       {/* Search pulse ring */}
@@ -170,8 +161,8 @@ function MainNode({ data, id }: { data: any; id: string }) {
             ? `0 0 60px rgba(${c},0.85), 0 0 140px rgba(${c},0.3)`
             : isExpanding ? `0 0 40px rgba(${c},0.6)`
             : hov ? `0 0 32px rgba(${c},0.4)` : 'none',
-          filter: `blur(${blurPx}px)`, opacity: op,
-          transition: 'transform 0.6s cubic-bezier(0.16,1,0.3,1), opacity 0.5s ease, filter 0.5s ease, background 0.3s ease, box-shadow 0.35s ease, color 0.3s ease',
+          opacity: op,
+          transition: 'transform 0.6s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease, background 0.3s ease, box-shadow 0.35s ease, color 0.3s ease',
           cursor: 'pointer', userSelect: 'none',
           whiteSpace: isSel ? 'normal' : 'nowrap',
           maxWidth: isSel ? 280 : undefined,
@@ -213,20 +204,15 @@ function SubNode({ data, id }: { data: any; id: string }) {
   const d: number = data.depth ?? 0.5;
 
   const isSel = selectedId === id;
-  const selGroup = selectedId ? getGroup(selectedId) : -1;
-  const isSameGroup = !isSel && selGroup === data.groupIdx;
   const isParentSel = selectedId === `m${data.groupIdx}`;
-  const isFaded = !exportMode && selectedId !== null && !isSel && !isSameGroup;
   const isExpanding = expandingId === id;
 
   let scale = 0.78 + d * 0.22;
   if (isSel) scale = 1.1;
   else if (isParentSel) scale = 0.96;
-  else if (isFaded) scale = (0.78 + d * 0.22) * 0.5;
   if (hov && !isSel) scale *= 1.08;
 
-  const op = exportMode ? 1 : isSel ? 1 : isFaded ? 0.06 : isSameGroup ? 1 : 0.82;
-  const blurPx = exportMode ? 0 : isFaded ? 5 : 0;
+  const op = exportMode ? 1 : 0.82;
   const floatClass = (data.floatClass as string) ?? '';
 
   return (
@@ -258,8 +244,8 @@ function SubNode({ data, id }: { data: any; id: string }) {
           boxShadow: isSel ? `0 0 28px rgba(${c},0.6), 0 0 70px rgba(${c},0.2)`
             : isParentSel ? `0 0 18px rgba(${c},0.28)`
             : hov ? `0 0 16px rgba(${c},0.35)` : 'none',
-          filter: `blur(${blurPx}px)`, opacity: op,
-          transition: 'transform 0.6s cubic-bezier(0.16,1,0.3,1), opacity 0.5s ease, filter 0.5s ease, background 0.3s ease, box-shadow 0.35s ease, color 0.3s ease',
+          opacity: op,
+          transition: 'transform 0.6s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease, background 0.3s ease, box-shadow 0.35s ease, color 0.3s ease',
           cursor: 'pointer', userSelect: 'none',
           whiteSpace: isSel ? 'normal' : 'nowrap',
           maxWidth: isSel ? 240 : undefined,

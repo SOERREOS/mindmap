@@ -12,6 +12,13 @@ interface ResearchSidebarProps {
 export default function ResearchSidebar({ node, onClose, userRole }: ResearchSidebarProps) {
   const [memo, setMemo] = useState('');
 
+  // ESC 키로 닫기
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    if (node) window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [node, onClose]);
+
   // 노드 선택 시 해당 노드 전용 메모 불러오기 (간이 구현: 로컬 스토리지)
   useEffect(() => {
     if (node) {
@@ -30,23 +37,12 @@ export default function ResearchSidebar({ node, onClose, userRole }: ResearchSid
   return (
     <AnimatePresence>
       {node && (
-        <>
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="fixed inset-0 z-[100] bg-black/20 backdrop-blur-[2px]"
-          />
-          
-          {/* Sidebar */}
-          <motion.div
+              <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 z-[101] h-screen w-[420px] bg-[#0a0a1a]/90 backdrop-blur-[32px] border-l border-white/10 shadow-[-20px_0_50px_rgba(0,0,0,0.5)] flex flex-col"
+            transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+            className="fixed top-0 right-0 z-[101] h-screen w-[400px] bg-[#08081a]/95 backdrop-blur-[40px] border-l border-white/8 shadow-[-30px_0_60px_rgba(0,0,0,0.6)] flex flex-col"
           >
             {/* Header */}
             <div className="p-8 border-b border-white/5 flex items-center justify-between">
@@ -153,7 +149,6 @@ export default function ResearchSidebar({ node, onClose, userRole }: ResearchSid
               </button>
             </div>
           </motion.div>
-        </>
       )}
     </AnimatePresence>
   );

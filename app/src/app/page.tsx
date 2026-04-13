@@ -447,18 +447,38 @@ export default function App() {
     <main className="relative w-full h-screen bg-[#07070f]">
       <StarField />
       
-      {/* Global Header / Role Selector */}
+      {/* Mapping mode: Save/Export top-right */}
       <AnimatePresence>
-        {(status === 'idle' || status === 'mapping') && !exportMode && (
-          <motion.header
-            initial={{ y: -50, opacity: 0 }}
+        {status === 'mapping' && !exportMode && (
+          <motion.div
+            initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -50, opacity: 0 }}
-            className="absolute top-0 left-0 right-0 z-[80] p-6 flex items-center justify-between"
+            exit={{ y: -20, opacity: 0 }}
+            className="absolute top-0 right-0 z-[80] p-6 flex items-center gap-3"
           >
-            <div className="flex items-center gap-6">
-              <h1 className="text-white/40 text-[10px] tracking-[0.6em] uppercase font-black">Soeroes</h1>
-              <div className="h-4 w-[1px] bg-white/10" />
+            <button onClick={handleSave}
+              className={`text-[10px] tracking-[0.3em] uppercase transition-all border rounded-full px-5 py-2 backdrop-blur-md font-bold ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
+              {saved ? 'Saved' : 'Save'}
+            </button>
+            <button onClick={handleExport}
+              className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-5 py-2 backdrop-blur-md font-bold">
+              Export PNG
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="relative z-10 h-full">
+        <AnimatePresence mode="wait">
+
+          {status === 'idle' && (
+            <motion.div key="idle"
+              initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.5 }}
+              className="flex flex-col items-center justify-center h-full gap-6">
+              <p className="text-white/18 text-[11px] tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
+
+              {/* Role Selector — centered */}
               <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1">
                 {USER_ROLES.map(role => (
                   <button
@@ -471,37 +491,11 @@ export default function App() {
                   </button>
                 ))}
               </div>
-            </div>
-            
-            {status === 'mapping' && (
-              <div className="flex items-center gap-3">
-                 <button onClick={handleSave}
-                  className={`text-[10px] tracking-[0.3em] uppercase transition-all border rounded-full px-5 py-2 backdrop-blur-md font-bold ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
-                  {saved ? 'Saved' : 'Save'}
-                </button>
-                <button onClick={handleExport}
-                  className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-5 py-2 backdrop-blur-md font-bold">
-                  Export PNG
-                </button>
-              </div>
-            )}
-          </motion.header>
-        )}
-      </AnimatePresence>
 
-      <div className="relative z-10 h-full">
-        <AnimatePresence mode="wait">
-
-          {status === 'idle' && (
-            <motion.div key="idle"
-              initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.5 }}
-              className="flex flex-col items-center justify-center h-full gap-5">
-              <p className="text-white/18 text-[11px] tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
               <InputWithHover inputRef={inputRef} value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()} />
-              <div className="flex items-center gap-6 mt-4">
+              <div className="flex items-center gap-6">
                 <button onClick={handleLoadFromFile}
                   className="text-white/30 hover:text-white/70 text-[11px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-8 py-3 backdrop-blur-md">
                   Open Project
@@ -536,7 +530,7 @@ export default function App() {
                 userRole={userRole}
                 onSelectNode={(node: any) => setSelectedNodeData(node)}
               />
-              <div className="absolute top-24 left-6">
+              <div className="absolute top-6 left-6">
                 <button onClick={reset}
                   className="text-white/22 hover:text-white/60 text-[10px] tracking-[0.4em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-6 py-2.5 backdrop-blur-md font-bold">
                   ← Back

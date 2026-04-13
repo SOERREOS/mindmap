@@ -15,22 +15,34 @@ async function getModels(): Promise<string[]> {
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${API_KEY}&pageSize=50`
+      `https://generativelanguage.googleapis.com/v1/models?key=${API_KEY}&pageSize=50`
     );
     const data = await res.json();
-    const available = new Set<string>(
-      (data.models ?? [])
-        .filter((m: any) =>
-          Array.isArray(m.supportedGenerationMethods) &&
-          m.supportedGenerationMethods.includes('generateContent')
-        )
-        .map((m: any) => (m.name as string).replace('models/', ''))
-    );
+    const availableModels = (data.models ?? [])
+      .filter((m: any) =>
+        Array.isArray(m.supportedGenerationMethods) &&
+        m.supportedGenerationMethods.includes('generateContent')
+      )
+      .map((m: any) => (m.name as string).replace('models/', ''));
+
+    const available = new Set<string>(availableModels);
+    
+    // 1. 선호하는 모델 중 실제 사용 가능한 것 필터링
     const filtered = PREFERRED.filter(m => available.has(m));
-    _cachedModels = filtered.length > 0 ? filtered : ['gemini-1.5-flash'];
+    
+    if (filtered.length > 0) {
+      _cachedModels = filtered;
+    } else if (availableModels.length > 0) {
+      // 2. 선호 모델이 하나도 없다면, 리스트에서 아무 'flash'나 'pro'가 포함된 모델 선택
+      _cachedModels = availableModels
+        .filter(m => m.includes('flash') || m.includes('pro'))
+        .slice(0, 3);
+      if (_cachedModels.length === 0) _cachedModels = [availableModels[0]];
+    } else {
+      _cachedModels = ['gemini-1.5-flash']; // 최후의 보루
+    }
   } catch {
-    // 네트워크 오류 시 가장 안전한 모델로 고정
-    _cachedModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    _cachedModels = ['gemini-1.5-flash'];
   }
 
   return _cachedModels;
@@ -105,10 +117,10 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
   let lastError = '';
 
   for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 1; attempt++) {
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
+          `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${API_KEY}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

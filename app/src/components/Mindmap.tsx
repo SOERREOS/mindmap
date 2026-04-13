@@ -601,7 +601,7 @@ const MindmapContent = forwardRef<MindmapHandle, {
               initial={{ opacity: 0, y: 15, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 15, scale: 0.95 }}
-              className="absolute bottom-6 sm:bottom-10 left-3 right-3 sm:left-1/2 sm:right-auto z-[200] sm:w-[500px] sm:-translate-x-1/2"
+              className="absolute bottom-24 sm:bottom-10 left-3 right-3 sm:left-1/2 sm:right-auto z-[200] sm:w-[500px] sm:-translate-x-1/2"
             >
               <div className="bg-[#0f0f23]/90 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full p-2 flex items-center shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
                 <input

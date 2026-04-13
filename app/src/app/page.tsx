@@ -304,6 +304,9 @@ export default function App() {
   const [exportMode, setExportMode] = useState(false);
   // --- New Creative Features State ---
   const [userRole, setUserRole] = useState(USER_ROLES[0].label);
+  const [customRoleInput, setCustomRoleInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const customRoleRef = useRef<HTMLInputElement>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<(ResearchSubNode | ResearchMainNode) | null>(null);
   const [aiMessage, setAiMessage] = useState('');
   // ----------------------------------
@@ -460,23 +463,46 @@ export default function App() {
     <main className="relative w-full h-screen bg-[#07070f]">
       <StarField />
       
-      {/* Mapping mode: Save/Export top-right */}
+      {/* Mapping mode: PC 상단 우측 Save/Export */}
       <AnimatePresence>
         {status === 'mapping' && !exportMode && (
           <motion.div
             initial={{ y: -20, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -20, opacity: 0 }}
-            className="absolute top-0 right-0 z-[80] p-4 sm:p-6 flex items-center gap-2 sm:gap-3 safe-top"
+            className="hidden sm:flex absolute top-0 right-0 z-[80] p-6 items-center gap-3"
           >
             <button onClick={handleSave}
-              className={`text-[10px] tracking-[0.2em] sm:tracking-[0.3em] uppercase transition-all border rounded-full px-4 sm:px-5 py-2 backdrop-blur-md font-bold active:scale-95 ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
-              {saved ? '✓' : 'Save'}
+              className={`text-[10px] tracking-[0.3em] uppercase transition-all border rounded-full px-5 py-2 backdrop-blur-md font-bold active:scale-95 ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
+              {saved ? 'Saved' : 'Save'}
             </button>
             <button onClick={handleExport}
-              className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.2em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-4 sm:px-5 py-2 backdrop-blur-md font-bold active:scale-95 hidden sm:block">
+              className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-5 py-2 backdrop-blur-md font-bold active:scale-95">
               Export
             </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Mapping mode: 모바일 하단 바 */}
+      <AnimatePresence>
+        {status === 'mapping' && !exportMode && (
+          <motion.div
+            initial={{ y: 60, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 60, opacity: 0 }}
+            className="sm:hidden fixed bottom-0 left-0 right-0 z-[80] safe-bottom"
+          >
+            <div className="mx-4 mb-4 flex items-center gap-2 bg-[#0a0a1a]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-2">
+              <button onClick={reset}
+                className="flex-1 py-3 rounded-xl text-white/50 text-[11px] tracking-[0.25em] uppercase font-bold active:scale-95 transition-all hover:bg-white/5 border border-white/8">
+                ← 돌아가기
+              </button>
+              <button onClick={handleSave}
+                className={`flex-1 py-3 rounded-xl text-[11px] tracking-[0.25em] uppercase font-bold active:scale-95 transition-all border ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/50 border-white/8 hover:bg-white/5'}`}>
+                {saved ? '✓ 저장됨' : '저장'}
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -491,20 +517,76 @@ export default function App() {
               className="flex flex-col items-center justify-center h-full gap-5 px-4 safe-top safe-bottom">
               <p className="text-white/18 text-[10px] sm:text-[11px] tracking-[0.45em] sm:tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
 
-              {/* Role Selector — 모바일: 가로 스크롤 */}
-              <div className="w-full max-w-[480px] overflow-x-auto mobile-scroll px-4">
-                <div className="flex items-center gap-1.5 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1 min-w-max mx-auto w-fit">
-                  {USER_ROLES.map(role => (
+              {/* Role Selector — 커스텀 포함 */}
+              <div className="w-full max-w-[520px] px-4 flex flex-col items-center gap-2">
+                <div className="overflow-x-auto mobile-scroll w-full">
+                  <div className="flex items-center gap-1.5 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1 min-w-max mx-auto w-fit">
+                    {USER_ROLES.map(role => (
+                      <button
+                        key={role.id}
+                        onClick={() => { setUserRole(role.label); setShowCustomInput(false); }}
+                        className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${userRole === role.label && !showCustomInput ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
+                      >
+                        <span>{role.emoji}</span>
+                        {role.label}
+                      </button>
+                    ))}
                     <button
-                      key={role.id}
-                      onClick={() => setUserRole(role.label)}
-                      className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider sm:tracking-widest transition-all flex items-center gap-1.5 whitespace-nowrap ${userRole === role.label ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
+                      onClick={() => {
+                        setShowCustomInput(true);
+                        setTimeout(() => customRoleRef.current?.focus(), 50);
+                      }}
+                      className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${showCustomInput ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
                     >
-                      <span>{role.emoji}</span>
-                      {role.label}
+                      <span>✏️</span>
+                      커스텀
                     </button>
-                  ))}
+                  </div>
                 </div>
+                <AnimatePresence>
+                  {showCustomInput && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0, y: -4 }}
+                      animate={{ opacity: 1, height: 'auto', y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -4 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-full max-w-[320px] overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-full px-4 py-1.5 mt-1">
+                        <input
+                          ref={customRoleRef}
+                          value={customRoleInput}
+                          onChange={e => setCustomRoleInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && customRoleInput.trim()) {
+                              setUserRole(customRoleInput.trim());
+                              setShowCustomInput(false);
+                            }
+                            if (e.key === 'Escape') setShowCustomInput(false);
+                          }}
+                          placeholder="직접 입력 (예: 스타트업 창업자)"
+                          className="flex-1 bg-transparent text-white text-[12px] outline-none placeholder:text-white/20"
+                        />
+                        <button
+                          onClick={() => {
+                            if (customRoleInput.trim()) {
+                              setUserRole(customRoleInput.trim());
+                              setShowCustomInput(false);
+                            }
+                          }}
+                          className="text-white/50 hover:text-white text-[10px] tracking-widest font-bold uppercase transition-colors whitespace-nowrap active:scale-95"
+                        >
+                          적용
+                        </button>
+                      </div>
+                      {userRole && !USER_ROLES.find(r => r.label === userRole) && (
+                        <p className="text-center text-[10px] text-white/30 mt-1.5 tracking-wider">
+                          현재: <span className="text-white/60">{userRole}</span>
+                        </p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
 
               <InputWithHover inputRef={inputRef} value={inputValue}
@@ -547,9 +629,10 @@ export default function App() {
                 userRole={userRole}
                 onSelectNode={(node: any) => setSelectedNodeData(node)}
               />
-              <div className="absolute top-4 sm:top-6 left-4 sm:left-6 safe-top">
+              {/* PC 전용 Back 버튼 */}
+              <div className="hidden sm:block absolute top-6 left-6">
                 <button onClick={reset}
-                  className="text-white/22 hover:text-white/60 text-[10px] tracking-[0.3em] sm:tracking-[0.4em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-5 sm:px-6 py-2.5 backdrop-blur-md font-bold active:scale-95">
+                  className="text-white/22 hover:text-white/60 text-[10px] tracking-[0.4em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-6 py-2.5 backdrop-blur-md font-bold active:scale-95">
                   ← Back
                 </button>
               </div>

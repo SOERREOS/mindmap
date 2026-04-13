@@ -4,11 +4,21 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import Mindmap, { type MindmapHandle } from '@/components/Mindmap';
 import StarField from '@/components/StarField';
-import { conductResearch, ResearchMainNode } from '@/lib/api';
+import ResearchSidebar from '@/components/ResearchSidebar';
+import { conductResearch, ResearchMainNode, ResearchSubNode } from '@/lib/api';
 import { initAuth, verify, changePassword, isAuth, setAuth } from '@/lib/auth';
 import { rollDice } from '@/lib/dice';
 import { deleteMap, formatDate, loadMaps, saveMap, type SavedMap } from '@/lib/storage';
 import type { Edge, Node } from '@xyflow/react';
+
+// ── 사용자 역할 정의 ───────────────────────────────────────────
+const USER_ROLES = [
+  { id: 'designer', label: '디자이너', emoji: '🎨' },
+  { id: 'marketer', label: '마케터', emoji: '📈' },
+  { id: 'writer', label: '작가', emoji: '✍️' },
+  { id: 'engineer', label: '엔지니어', emoji: '⚙️' },
+  { id: 'researcher', label: '연구원', emoji: '🔬' },
+];
 
 // ── 해킹 주사위 ───────────────────────────────────────────────
 const HACK_CHARS = '0123456789!@#$%^&*()[]{}<>|?/~ABCDEFGHIJKLMNabcdefghijklmn가나다라마바사아자';
@@ -263,7 +273,11 @@ export default function App() {
   const [showPwdModal, setShowPwdModal] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [exportMode, setExportMode] = useState(false);
+  // --- New Creative Features State ---
+  const [userRole, setUserRole] = useState(USER_ROLES[0].label);
+  const [selectedNodeData, setSelectedNodeData] = useState<(ResearchSubNode | ResearchMainNode) | null>(null);
+  // ----------------------------------
+
   const inputRef = useRef<HTMLInputElement>(null);
   const mindmapRef = useRef<MindmapHandle | null>(null);
 
@@ -274,8 +288,9 @@ export default function App() {
   const runResearch = async (kw: string) => {
     setSavedMapState(null);
     setStatus('thinking');
+    setSelectedNodeData(null);
     try {
-      const results = await conductResearch(kw);
+      const results = await conductResearch(kw, userRole);
       setData({ root: kw, children: results });
       setStatus('mapping');
     } catch (err) {
@@ -294,7 +309,7 @@ export default function App() {
   };
 
   const reset = () => {
-    setStatus('idle'); setData(null); setSavedMapState(null); setSaved(false);
+    setStatus('idle'); setData(null); setSavedMapState(null); setSaved(false); setSelectedNodeData(null);
     setTimeout(() => inputRef.current?.focus(), 80);
   };
 
@@ -413,22 +428,71 @@ export default function App() {
   return (
     <main className="relative w-full h-screen bg-[#07070f]">
       <StarField />
+      
+      {/* Global Header / Role Selector */}
+      <AnimatePresence>
+        {(status === 'idle' || status === 'mapping') && !exportMode && (
+          <motion.header
+            initial={{ y: -50, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -50, opacity: 0 }}
+            className="absolute top-0 left-0 right-0 z-[80] p-6 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-6">
+              <h1 className="text-white/40 text-[10px] tracking-[0.6em] uppercase font-black">Soeroes</h1>
+              <div className="h-4 w-[1px] bg-white/10" />
+              <div className="flex items-center gap-2 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1">
+                {USER_ROLES.map(role => (
+                  <button
+                    key={role.id}
+                    onClick={() => setUserRole(role.label)}
+                    className={`px-4 py-1.5 rounded-full text-[11px] font-bold tracking-widest transition-all flex items-center gap-2 ${userRole === role.label ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
+                  >
+                    <span>{role.emoji}</span>
+                    {role.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            {status === 'mapping' && (
+              <div className="flex items-center gap-3">
+                 <button onClick={handleSave}
+                  className={`text-[10px] tracking-[0.3em] uppercase transition-all border rounded-full px-5 py-2 backdrop-blur-md font-bold ${saved ? 'text-green-400 border-green-400/30 bg-green-400/5' : 'text-white/40 hover:text-white/80 border-white/10 hover:border-white/30 hover:bg-white/5'}`}>
+                  {saved ? 'Saved' : 'Save'}
+                </button>
+                <button onClick={handleExport}
+                  className="text-white/40 hover:text-white/80 text-[10px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 hover:bg-white/5 rounded-full px-5 py-2 backdrop-blur-md font-bold">
+                  Export PNG
+                </button>
+              </div>
+            )}
+          </motion.header>
+        )}
+      </AnimatePresence>
+
       <div className="relative z-10 h-full">
         <AnimatePresence mode="wait">
 
           {status === 'idle' && (
             <motion.div key="idle"
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.5 }}
               className="flex flex-col items-center justify-center h-full gap-5">
-              <p className="text-white/18 text-[10px] tracking-[0.55em] uppercase">Spatial Research</p>
+              <p className="text-white/18 text-[11px] tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
               <InputWithHover inputRef={inputRef} value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()} />
-              <button onClick={handleLoadFromFile}
-                className="absolute bottom-7 left-1/2 -translate-x-1/2 text-white/30 hover:text-white/70 text-[12px] tracking-[0.4em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-7 py-2.5 backdrop-blur-md">
-                불러오기
-              </button>
+              <div className="flex items-center gap-6 mt-4">
+                <button onClick={handleLoadFromFile}
+                  className="text-white/30 hover:text-white/70 text-[11px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-8 py-3 backdrop-blur-md">
+                  Open Project
+                </button>
+                <button onClick={() => setShowSaved(true)}
+                  className="text-white/30 hover:text-white/70 text-[11px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-8 py-3 backdrop-blur-md">
+                  History
+                </button>
+              </div>
             </motion.div>
           )}
 
@@ -442,7 +506,7 @@ export default function App() {
 
           {status === 'mapping' && data && (
             <motion.div key="mapping"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6 }}
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8 }}
               className="relative h-full w-full">
               <Mindmap
                 ref={mindmapRef}
@@ -451,30 +515,26 @@ export default function App() {
                 exportMode={exportMode}
                 savedNodes={savedMapState?.nodes}
                 savedEdges={savedMapState?.edges}
+                userRole={userRole}
+                onSelectNode={(node: any) => setSelectedNodeData(node)}
               />
-              <div className="absolute top-6 left-6">
+              <div className="absolute top-24 left-6">
                 <button onClick={reset}
-                  className="text-white/22 hover:text-white/60 text-[11px] tracking-[0.3em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-5 py-2 backdrop-blur-md">
-                  ← 다시 탐색
-                </button>
-              </div>
-              <div className="absolute top-6 right-6 flex items-center gap-3">
-                <span className="text-white/14 text-[11px] tracking-widest">
-                  {1 + data.children.length + data.children.reduce((a, c) => a + (c.children?.length ?? 0), 0)} nodes
-                </span>
-                <button onClick={handleSave}
-                  className={`text-[11px] tracking-[0.25em] uppercase transition-all border rounded-full px-4 py-1.5 backdrop-blur-md ${saved ? 'text-green-400/60 border-green-400/30' : 'text-white/22 hover:text-white/55 border-white/8 hover:border-white/22'}`}>
-                  {saved ? '✓ 저장됨' : '저장'}
-                </button>
-                <button onClick={handleExport}
-                  className="text-white/22 hover:text-white/55 text-[11px] tracking-[0.25em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-4 py-1.5 backdrop-blur-md">
-                  PNG
+                  className="text-white/22 hover:text-white/60 text-[10px] tracking-[0.4em] uppercase transition-all border border-white/8 hover:border-white/22 rounded-full px-6 py-2.5 backdrop-blur-md font-bold">
+                  ← Back
                 </button>
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
+
+      {/* Research Sidebar */}
+      <ResearchSidebar 
+        node={selectedNodeData} 
+        userRole={userRole}
+        onClose={() => setSelectedNodeData(null)} 
+      />
 
       <AnimatePresence>
         {showPwdModal && <PasswordModal onClose={() => { setShowPwdModal(false); setTimeout(() => inputRef.current?.focus(), 80); }} />}

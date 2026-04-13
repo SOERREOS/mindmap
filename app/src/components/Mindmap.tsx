@@ -6,12 +6,13 @@ import {
 import {
   Background, MiniMap, ReactFlow, ReactFlowProvider,
   getBezierPath, getStraightPath, useEdgesState, useNodesState, useReactFlow,
-  Handle, Position,
-  type Edge, type EdgeProps, type Node, type NodeMouseHandler, type NodeTypes,
+  Handle, Position, addEdge,
+  type Edge, type EdgeProps, type Node, type NodeMouseHandler, type NodeTypes, type OnConnect,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import type { ResearchMainNode } from '@/lib/api';
-import { expandNode } from '@/lib/api';
+import { motion, AnimatePresence } from 'framer-motion';
+import type { ResearchMainNode, ResearchSubNode } from '@/lib/api';
+import { expandNode, steeredExpandNode, bridgeIdeas } from '@/lib/api';
 
 // ── 그룹 색상 ──────────────────────────────────────────────────
 export const GROUP_COLORS = ['#4dd0e1', '#c084fc', '#4ade80', '#fb923c', '#f472b6'];
@@ -384,11 +385,14 @@ const MindmapContent = forwardRef<MindmapHandle, {
   exportMode: boolean;
   savedNodes?: Node[];
   savedEdges?: Edge[];
-}>(function MindmapContent({ rootLabel, childrenData, exportMode, savedNodes, savedEdges }, ref) {
+  userRole: string;
+  onSelectNode: (node: (ResearchSubNode | ResearchMainNode) | null) => void;
+}>(function MindmapContent({ rootLabel, childrenData, exportMode, savedNodes, savedEdges, userRole, onSelectNode }, ref) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandingId, setExpandingId] = useState<string | null>(null);
+  const [cmdValue, setCmdValue] = useState('');
   const { fitView, setCenter } = useReactFlow();
 
   const originalEdgesRef = useRef<Edge[]>([]);
@@ -412,18 +416,15 @@ const MindmapContent = forwardRef<MindmapHandle, {
   }));
 
   // ── 초기 그래프 ─────────────────────────────────────────────
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     expandedRef.current.clear();
     expandingRef.current.clear();
 
     if (savedNodes && savedNodes.length > 0) {
-      // 저장된 상태 복원 (확장 노드 포함)
       const es = savedEdges ?? [];
       setNodes(savedNodes);
       setEdges(es);
       originalEdgesRef.current = es;
-      // expandedRef 복원
       savedNodes.forEach(n => { if (n.data?.expanded) expandedRef.current.add(n.id); });
     } else {
       const { nodes: n, edges: e } = buildGraph(rootLabel, childrenData);
@@ -432,9 +433,9 @@ const MindmapContent = forwardRef<MindmapHandle, {
       setEdges(e);
     }
     setTimeout(() => fitView({ duration: 2200, padding: 0.14 }), 350);
-  }, [rootLabel]); // rootLabel 변경 = 새 검색
+  }, [rootLabel]);
 
-  // ── 엣지 선택 반응 ──────────────────────────────────────────
+  // ── 엣지 및 그룹 오라 효과 ──────────────────────────────────────
   useEffect(() => {
     const selGroup = selectedId ? getGroup(selectedId) : -1;
     setEdges(originalEdgesRef.current.map(e => {
@@ -446,18 +447,13 @@ const MindmapContent = forwardRef<MindmapHandle, {
         ...e,
         style: {
           ...e.style,
-          opacity: inGroup
-            ? (direct ? 1 : 0.72)
-            : 0.09,
-          strokeWidth: direct
-            ? ((e.style?.strokeWidth as number ?? 0.8) * 1.5)
-            : e.style?.strokeWidth,
+          opacity: inGroup ? (direct ? 1 : 0.72) : 0.06,
+          strokeWidth: direct ? ((e.style?.strokeWidth as number ?? 0.8) * 1.5) : e.style?.strokeWidth,
         },
       };
     }));
   }, [selectedId, exportMode, setEdges]);
 
-  // ── 그룹 오라 (위치 버그 수정: nodeOrigin=[0.5,0.5] 기준) ──
   useEffect(() => {
     setNodes(prev => {
       const base = prev.filter(n => n.type !== 'oura');
@@ -466,126 +462,98 @@ const MindmapContent = forwardRef<MindmapHandle, {
       if (group === -1) return base;
       const gNodes = base.filter(n => getGroup(n.id) === group);
       if (!gNodes.length) return base;
-      // nodeOrigin=[0.5,0.5]: position = 노드 중심 → 오라도 중심 기준으로
       const cx = gNodes.reduce((s, n) => s + n.position.x, 0) / gNodes.length;
       const cy = gNodes.reduce((s, n) => s + n.position.y, 0) / gNodes.length;
       return [...base, {
         id: `oura-${group}`, type: 'oura',
         data: { groupIdx: group },
-        position: { x: cx, y: cy }, // 중심 좌표 직접 사용 (offset 없음)
+        position: { x: cx, y: cy },
         zIndex: -20,
       }];
     });
   }, [selectedId, setNodes]);
 
-  // ── 키보드 단축키 ───────────────────────────────────────────
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (e.key === 'Escape') setSelectedId(null);
-      if (e.key === 'f' || e.key === 'F') fitView({ duration: 850, padding: 0.14 });
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [fitView]);
+  // ── 아이디어 브릿징 (Idea Bridging) ──────────────────────────
+  const onConnect: OnConnect = useCallback(async (params) => {
+    const sourceNode = nodesRef.current.find(n => n.id === params.source);
+    const targetNode = nodesRef.current.find(n => n.id === params.target);
+    if (!sourceNode || !targetNode) return;
 
-  // ── 노드 확장 (더블클릭) ────────────────────────────────────
-  const handleExpand = useCallback(async (node: Node) => {
+    const newEdge = { ...params, id: `bridge-${params.source}-${params.target}-${Date.now()}`, type: 'particle', style: { stroke: '#ffffff', strokeWidth: 2, opacity: 0.6 } };
+    setEdges(prev => { const upd = addEdge(newEdge, prev); originalEdgesRef.current = upd; return upd; });
+    
+    setExpandingId(params.source);
+    try {
+      const results = await bridgeIdeas(sourceNode.data.label, targetNode.data.label, userRole);
+      const midX = (sourceNode.position.x + targetNode.position.x) / 2;
+      const midY = (sourceNode.position.y + targetNode.position.y) / 2;
+      
+      const newNodes: Node[] = results.map((b, i) => ({
+        id: `bridge-n-${params.source}-${params.target}-${i}`, type: 'sub',
+        data: { ...b, depth: 0.6, groupIdx: sourceNode.data.groupIdx, floatClass: 'node-float-sa' },
+        position: { x: midX + (i - 1) * 200, y: midY + 200 },
+      }));
+
+      setNodes(prev => [...prev, ...spreadNodes(newNodes, prev)]);
+      const bEdges: Edge[] = newNodes.map(bn => ({ id: `be-${bn.id}`, source: params.source, target: bn.id, type: 'particle', style: { stroke: '#4dd0e1', opacity: 0.3 } }));
+      setEdges(prev => { const upd = [...prev, ...bEdges]; originalEdgesRef.current = upd; return upd; });
+    } finally { setExpandingId(null); }
+  }, [userRole, setNodes, setEdges]);
+
+  // ── 리서치 확장 ──────────────────────────────────────────────
+  const handleExpand = useCallback(async (node: Node, customPrompt?: string) => {
     if (node.type === 'oura' || node.type === 'root') return;
-    if (expandedRef.current.has(node.id)) return;
     if (expandingRef.current.has(node.id)) return;
 
     expandingRef.current.add(node.id);
     setExpandingId(node.id);
 
     try {
-      const subs = await expandNode(node.data.label as string);
+      const subs = customPrompt 
+        ? await steeredExpandNode(node.data.label as string, customPrompt, userRole)
+        : await expandNode(node.data.label as string, userRole);
+      
       expandedRef.current.add(node.id);
       const groupIdx = (node.data.groupIdx as number) ?? 0;
       const parentDepth = (node.data.depth as number) ?? 0.5;
       const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length];
 
-      const rawNew: Node[] = subs.map((sub, i) => {
-        const angle = (i / subs.length) * Math.PI * 2 - Math.PI / 2;
-        const depth = parentDepth * (0.42 + (i % 3) * 0.15);
-        return {
-          id: `exp-${node.id}-${i}`, type: 'sub',
-          data: { label: sub.label, summary: sub.summary, depth, groupIdx, floatClass: SUB_FLOATS[(groupIdx * 5 + i) % SUB_FLOATS.length] },
-          position: { x: node.position.x + Math.cos(angle) * 290, y: node.position.y + Math.sin(angle) * 290 },
-          zIndex: Math.round(depth * 60),
-        };
-      });
+      const rawNew: Node[] = subs.map((sub, i) => ({
+        id: `exp-${node.id}-${Date.now()}-${i}`, type: 'sub',
+        data: { ...sub, depth: parentDepth * 0.6, groupIdx, floatClass: SUB_FLOATS[(groupIdx * 5 + i) % SUB_FLOATS.length] },
+        position: { x: node.position.x + Math.cos(i) * 300, y: node.position.y + Math.sin(i) * 300 },
+        zIndex: 60,
+      }));
 
       setNodes(prev => {
         const spread = spreadNodes(rawNew, prev, 220);
-        return [
-          ...prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, expanded: true } } : n),
-          ...spread,
-        ];
+        return [...prev.map(n => n.id === node.id ? { ...n, data: { ...n.data, expanded: true } } : n), ...spread];
       });
 
-      const newEdges: Edge[] = subs.map((_, i) => ({
-        id: `exp-e-${node.id}-${i}`,
-        source: node.id, target: `exp-${node.id}-${i}`, type: 'particle',
-        style: { stroke: color, strokeWidth: 0.8, opacity: 0.28 },
+      const newEdges: Edge[] = rawNew.map(n => ({
+        id: `e-${node.id}-${n.id}`, source: node.id, target: n.id, type: 'particle', style: { stroke: color, strokeWidth: 0.8, opacity: 0.28 },
       }));
 
-      setEdges(prev => {
-        const updated = [...prev, ...newEdges];
-        originalEdgesRef.current = updated;
-        return updated;
-      });
-
-      // 확장 후 전체 보기로 축소
+      setEdges(prev => { const updated = [...prev, ...newEdges]; originalEdgesRef.current = updated; return updated; });
       setTimeout(() => fitView({ duration: 900, padding: 0.20 }), 120);
     } catch {
       expandingRef.current.delete(node.id);
     }
     setExpandingId(null);
-  }, [setNodes, setEdges, fitView]);
+  }, [userRole, setNodes, setEdges, fitView]);
 
-  // ── 클릭 (싱글: 확대 + 선택 / 더블: 확장) ──────────────────
-  const handleNodeClick: NodeMouseHandler = useCallback((_, node) => {
-    if (node.type === 'oura') return;
-
-    if (lastClickRef.current === node.id && clickTimerRef.current) {
-      clearTimeout(clickTimerRef.current);
-      clickTimerRef.current = null;
-      lastClickRef.current = null;
-      handleExpand(node);
-      return;
-    }
-
-    lastClickRef.current = node.id;
-    clickTimerRef.current = setTimeout(() => {
-      clickTimerRef.current = null;
-      lastClickRef.current = null;
-      if (selectedIdRef.current === node.id) {
-        setSelectedId(null);
-        // 해제 시 카메라 유지 (사용자가 있던 위치 그대로)
-      } else {
-        setSelectedId(node.id);
-        // 클릭 시 해당 노드로 부드럽게 이동 + 적당한 확대
-        setCenter(node.position.x, node.position.y, { duration: 650, zoom: 1.55 });
-      }
-    }, 260);
-  }, [handleExpand, setCenter]);
-
-  const handlePaneClick = useCallback(() => {
-    setSelectedId(null);
-  }, []);
+  // ── 클릭 핸들러 ──────────────────────────────────────────────
+  const selectedNode = nodes.find(n => n.id === selectedId);
 
   return (
     <SelectCtx.Provider value={{ selectedId, exportMode, expandingId }}>
-      <div className="h-full w-full">
+      <div className="h-full w-full relative">
         <ReactFlow
-          nodes={nodes} edges={edges}
-          nodeTypes={nodeTypes} edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-          onNodeClick={handleNodeClick} onPaneClick={handlePaneClick}
-          nodesDraggable={false} nodesConnectable={false} elementsSelectable={false}
-          nodeOrigin={[0.5, 0.5]} colorMode="dark"
-          minZoom={0.06} maxZoom={3}
+          nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange} onEdgesChange={onEdgesChange} onConnect={onConnect}
+          onNodeClick={handleNodeClick} onPaneClick={() => { setSelectedId(null); onSelectNode(null); }}
+          nodesDraggable={false} nodesConnectable={true} elementsSelectable={false}
+          nodeOrigin={[0.5, 0.5]} colorMode="dark" minZoom={0.06} maxZoom={3}
         >
           <Background color="#16162a" gap={80} size={1} />
           <MiniMap
@@ -598,8 +566,37 @@ const MindmapContent = forwardRef<MindmapHandle, {
             maskColor="rgba(0,0,10,0.55)"
           />
         </ReactFlow>
-        <div className="absolute bottom-6 left-6 text-white/14 text-[12px] tracking-[0.25em] pointer-events-none">
-          ESC 해제 · F 전체보기 · 더블클릭 확장
+
+        {/* Command Input Overlay */}
+        <AnimatePresence>
+          {selectedId && !expandingId && selectedNode && selectedNode.type !== 'root' && (
+            <motion.div
+              initial={{ opacity: 0, y: 15, x: '-50%', scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, x: '-50%', scale: 1 }}
+              exit={{ opacity: 0, y: 15, x: '-50%', scale: 0.95 }}
+              className="absolute bottom-10 left-1/2 z-[200] w-[500px]"
+            >
+              <div className="bg-[#0f0f23]/80 backdrop-blur-xl border border-white/10 rounded-full p-2 flex items-center shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+                <input
+                  autoFocus value={cmdValue}
+                  onChange={(e) => setCmdValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' && cmdValue.trim()) { handleExpand(selectedNode, cmdValue); setCmdValue(''); } }}
+                  placeholder={`${selectedNode.data.label}에 대해 [${userRole}] 관점에서 무엇을 더 찾아볼까요?`}
+                  className="flex-1 bg-transparent border-none outline-none text-white px-6 py-3 text-sm placeholder:text-white/20"
+                />
+                <button
+                  onClick={() => { if (cmdValue.trim()) { handleExpand(selectedNode, cmdValue); setCmdValue(''); } }}
+                  className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-full text-xs font-bold tracking-widest transition-all uppercase"
+                >
+                  Expand
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <div className="absolute bottom-6 left-6 text-white/10 text-[10px] tracking-[0.4em] pointer-events-none uppercase">
+          드래그 연결: 아이디어 융합 · 더블클릭: 자동 확장 · 싱글클릭: 리서치 데이터
         </div>
       </div>
     </SelectCtx.Provider>
@@ -612,16 +609,15 @@ const Mindmap = forwardRef<MindmapHandle, {
   exportMode?: boolean;
   savedNodes?: Node[];
   savedEdges?: Edge[];
+  userRole: string;
+  onSelectNode: (node: (ResearchSubNode | ResearchMainNode) | null) => void;
 }>(function Mindmap(props, ref) {
   return (
     <ReactFlowProvider>
       <MindmapContent
+        {...props}
         ref={ref}
-        rootLabel={props.rootLabel}
-        childrenData={props.childrenData}
         exportMode={props.exportMode ?? false}
-        savedNodes={props.savedNodes}
-        savedEdges={props.savedEdges}
       />
     </ReactFlowProvider>
   );

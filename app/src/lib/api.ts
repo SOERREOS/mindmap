@@ -166,7 +166,7 @@ const callGemini = async (prompt: string, deep = false): Promise<any> => {
             evictModel(model);
             break;
           }
-          if (code === 429) break;
+          if (code === 429 || code === 503) break; // 할당량 초과나 서버 부하 시 즉시 다음 모델로 우회
           continue;
         }
 

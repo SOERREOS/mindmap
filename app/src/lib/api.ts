@@ -3,10 +3,10 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-1.5-flash',     // 가장 대중적이고 안정적인 표준 모델 (오류 최소화)
-  'gemini-2.0-flash',     // 최신 모델 (일부 환경에서 제한될 수 있음)
-  'gemini-1.5-pro',       // 심층 분석용
-  'gemini-1.5-flash-8b',  // 초경량 모델
+  'gemini-3.1-pro-preview', // 2026년 기준 최강 성능 모델
+  'gemini-2.5-flash',       // 2026년 표준 안정화 모델 (권장)
+  'gemini-2.5-pro',         // 높은 품질의 리서치용
+  'gemini-2.5-flash-lite',  // 초고속 대량 처리용
 ];
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────
@@ -29,10 +29,10 @@ async function getModels(): Promise<string[]> {
         .map((m: any) => (m.name as string).replace('models/', ''))
     );
     const filtered = PREFERRED.filter(m => available.has(m));
-    _cachedModels = filtered.length > 0 ? filtered : ['gemini-1.5-flash'];
+    _cachedModels = filtered.length > 0 ? filtered : ['gemini-2.5-flash'];
   } catch {
-    // 네트워크 오류 등 → 가장 안전하고 검증된 모델로 폴백
-    _cachedModels = ['gemini-1.5-flash', 'gemini-1.5-pro'];
+    // 네트워크 오류 등 → 2026년 기준 가장 안전하고 검증된 모델로 폴백
+    _cachedModels = ['gemini-2.5-flash', 'gemini-2.5-pro'];
   }
 
   return _cachedModels;

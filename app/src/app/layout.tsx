@@ -13,6 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_SITE_URL ?? "https://filum.vercel.app"
+  ),
   title: "Filum",
   description: "AI 기반 창의 리서치 엔진 — 아이디어의 실을 잇다",
   applicationName: "Filum",

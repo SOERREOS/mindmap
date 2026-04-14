@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toPng } from 'html-to-image';
 import Mindmap, { type MindmapHandle } from '@/components/Mindmap';
+import CorePointPinching from '@/components/CorePointPinching';
 import StarField from '@/components/StarField';
 import ResearchSidebar from '@/components/ResearchSidebar';
 import { conductResearch, ResearchMainNode, ResearchSubNode } from '@/lib/api';
@@ -356,13 +357,14 @@ function SavedMapsPanel({ onLoad, onClose }: { onLoad: (map: SavedMap) => void; 
 
 // ── 호버 반응형 검색창 ────────────────────────────────────────
 function InputWithHover({
-  inputRef, value, onChange, onKeyDown, onSubmit,
+  inputRef, value, onChange, onKeyDown, onSubmit, placeholder,
 }: {
   inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onSubmit: () => void;
+  placeholder?: string;
 }) {
   const [hovered, setHovered] = useState(false);
   return (
@@ -380,7 +382,7 @@ function InputWithHover({
           transition: 'box-shadow 0.3s ease',
         }}>
         <input ref={inputRef} value={value} onChange={onChange} onKeyDown={onKeyDown}
-          placeholder="단어를 입력하세요..."
+          placeholder={placeholder ?? "단어를 입력하세요..."}
           className="bg-white/[0.04] border border-white/10 rounded-full px-8 py-4 text-lg text-white outline-none focus:border-white/22 transition-colors w-full text-center placeholder:text-white/16"
         />
       </motion.div>
@@ -395,13 +397,192 @@ function InputWithHover({
   );
 }
 
+// ── 랜딩 카드 ─────────────────────────────────────────────────
+// SVG 기준: 1920px 뷰포트 / 아이콘 ~240px / 타이틀 53.87px / 설명 16.56px
+function LandingCard({
+  accentColor, iconSrc, titleLines, desc, onClick,
+}: {
+  accentColor: string;
+  iconSrc: string;
+  titleLines: [string, string];
+  desc: string;
+  onClick: () => void;
+}) {
+  const [hover, setHover] = useState(false);
+
+  const spring = { type: 'spring', stiffness: 280, damping: 24 } as const;
+
+  return (
+    <motion.button
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={onClick}
+      whileTap={{ scale: 0.97 }}
+      className="flex flex-col items-start text-left outline-none select-none"
+      style={{ gap: 'clamp(18px, 2.2vw, 42px)' }}
+    >
+      {/* 아이콘: 타이틀 텍스트보다 크게 — 22vw 기준 */}
+      <motion.div
+        animate={{
+          scale: hover ? 1.07 : 1,
+          opacity: hover ? 1 : 0.82,
+          filter: hover
+            ? `drop-shadow(0 0 36px ${accentColor}99)`
+            : 'drop-shadow(0 0 0px transparent)',
+        }}
+        transition={spring}
+        style={{
+          width: 'clamp(200px, 22vw, 420px)',
+          height: 'clamp(200px, 22vw, 420px)',
+        }}
+      >
+        <img
+          src={iconSrc}
+          alt=""
+          className="w-full h-full object-contain"
+          draggable={false}
+        />
+      </motion.div>
+
+      {/* 타이틀: Pretendard SemiBold 600 */}
+      <motion.div
+        animate={{ opacity: hover ? 1 : 0.9 }}
+        transition={{ duration: 0.25 }}
+      >
+        <p
+          className="whitespace-nowrap"
+          style={{
+            fontFamily: "'Pretendard', sans-serif",
+            fontWeight: 600,
+            fontSize: 'clamp(24px, 2.806vw, 54px)',
+            letterSpacing: '0em',
+            lineHeight: 1.05,
+            color: accentColor,
+          }}
+        >
+          {titleLines[0]}
+        </p>
+        <p
+          className="whitespace-nowrap"
+          style={{
+            fontFamily: "'Pretendard', sans-serif",
+            fontWeight: 600,
+            fontSize: 'clamp(24px, 2.806vw, 54px)',
+            letterSpacing: '0em',
+            lineHeight: 1.05,
+            color: accentColor,
+          }}
+        >
+          {titleLines[1]}
+        </p>
+      </motion.div>
+
+      {/* 설명: Pretendard Light 300 / 16.56px at 1920 = 0.8625vw */}
+      <motion.p
+        animate={{ opacity: hover ? 0.65 : 0.4 }}
+        transition={{ duration: 0.25 }}
+        style={{
+          fontFamily: "'Pretendard', sans-serif",
+          fontWeight: 300,
+          fontSize: 'clamp(11px, 0.863vw, 17px)',
+          letterSpacing: '0em',
+          lineHeight: 1.5,
+          color: '#ffffff',
+          maxWidth: 'clamp(160px, 14vw, 260px)',
+        }}
+      >
+        {desc}
+      </motion.p>
+
+      {/* SELECT 버튼: 112.29×47.56px at 1920 / 그라데이션 테두리 */}
+      <motion.div
+        animate={{
+          opacity: hover ? 1 : 0.55,
+          scale: hover ? 1.04 : 1,
+        }}
+        transition={spring}
+        style={{
+          fontFamily: "'Pretendard', sans-serif",
+          fontWeight: 300,
+          fontSize: 'clamp(11px, 0.888vw, 17px)',
+          letterSpacing: '0.12em',
+          color: hover ? accentColor : 'rgba(255,255,255,0.55)',
+          width: 'clamp(90px, 5.85vw, 113px)',
+          height: 'clamp(38px, 2.48vw, 48px)',
+          borderRadius: '9999px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: `linear-gradient(#07070f, #07070f) padding-box, linear-gradient(to bottom, transparent, ${accentColor}) border-box`,
+          border: '1px solid transparent',
+          transition: 'color 0.25s ease',
+        }}
+      >
+        SELECT
+      </motion.div>
+    </motion.button>
+  );
+}
+
+function LandingScreen({ onSelect }: { onSelect: (mode: 'research' | 'pinching') => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="relative flex flex-col items-center justify-center h-full"
+    >
+      {/* 메인 콘텐츠: 두 섹션 / 간격 ~13vw (SVG 247px / 1920) */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55 }}
+        className="flex flex-col sm:flex-row items-start justify-center px-8"
+        style={{ gap: 'clamp(56px, 13vw, 250px)' }}
+      >
+        <LandingCard
+          accentColor="#6200ff"
+          iconSrc="/icon-01.svg"
+          titleLines={['SPATIAL', 'RESEARCH']}
+          desc="AI기반 마인드맵핑 및 정보 시각화 툴"
+          onClick={() => onSelect('research')}
+        />
+        <LandingCard
+          accentColor="#00dea2"
+          iconSrc="/icon-02.svg"
+          titleLines={['PINCHING', 'ROOT']}
+          desc="뿌리처럼 펼쳐지는 아이디어의 허점 질문"
+          onClick={() => onSelect('pinching')}
+        />
+      </motion.div>
+
+      {/* 하단 Filum 로고 — SVG 기준 clip 높이 57px / 1920 = 2.97vw */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.55 }}
+        className="absolute bottom-6 left-0 right-0 flex items-center justify-center"
+      >
+        <img
+          src="/filum-logo.png"
+          alt="Filum"
+          className="object-contain w-auto"
+          style={{ height: 'clamp(32px, 2.97vw, 57px)', opacity: 0.65 }}
+          draggable={false}
+        />
+      </motion.div>
+    </motion.div>
+  );
+}
+
 // ── 메인 앱 ───────────────────────────────────────────────────
-type AppStatus = 'idle' | 'dice' | 'thinking' | 'mapping';
+type AppStatus = 'landing' | 'idle' | 'dice' | 'thinking' | 'mapping' | 'pinching';
 
 export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [authed, setAuthed] = useState(false);
-  const [status, setStatus] = useState<AppStatus>('idle');
+  const [status, setStatus] = useState<AppStatus>('landing');
+  const [mode, setMode] = useState<'research' | 'pinching'>('research');
   const [data, setData] = useState<{ root: string; children: ResearchMainNode[] } | null>(null);
   const [savedMapState, setSavedMapState] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
   const [inputValue, setInputValue] = useState('');
@@ -418,6 +599,7 @@ export default function App() {
   const customRoleRef = useRef<HTMLInputElement>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<(ResearchSubNode | ResearchMainNode) | null>(null);
   const [aiMessage, setAiMessage] = useState('');
+  const [pinchingIdea, setPinchingIdea] = useState('');
   // ----------------------------------
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -456,11 +638,16 @@ export default function App() {
       return;
     }
     if (kw === '영감 주사위') { setStatus('dice'); return; }
+    if (mode === 'pinching') {
+      setPinchingIdea(kw);
+      setStatus('pinching');
+      return;
+    }
     await runResearch(kw);
   };
 
   const reset = () => {
-    setStatus('idle'); setData(null); setSavedMapState(null); setSaved(false); setSelectedNodeData(null);
+    setStatus('landing'); setData(null); setSavedMapState(null); setSaved(false); setSelectedNodeData(null);
     setTimeout(() => inputRef.current?.focus(), 80);
   };
 
@@ -627,14 +814,54 @@ export default function App() {
       <div className="relative z-10 h-full">
         <AnimatePresence mode="wait">
 
+          {status === 'landing' && (
+            <LandingScreen key="landing" onSelect={(m) => {
+              setMode(m);
+              setStatus('idle');
+              setTimeout(() => inputRef.current?.focus(), 80);
+            }} />
+          )}
+
+          {status === 'pinching' && pinchingIdea && (
+            <motion.div key="pinching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full w-full">
+              <CorePointPinching initialIdea={pinchingIdea} onReset={reset} />
+            </motion.div>
+          )}
+
           {status === 'idle' && (
             <motion.div key="idle"
               initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.5 }}
               className="flex flex-col items-center justify-center h-full gap-5 px-4 safe-top safe-bottom">
-              <p className="text-white/18 text-[10px] sm:text-[11px] tracking-[0.45em] sm:tracking-[0.55em] uppercase font-medium">Creative Research Engine</p>
 
-              {/* Role Selector — 커스텀 포함 */}
+              {/* 모드 아이콘 (작게) + 툴 이름 */}
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4 }}
+                className="flex flex-col items-center gap-2"
+              >
+                <img
+                  src={mode === 'pinching' ? '/icon-02.svg' : '/icon-01.svg'}
+                  alt=""
+                  className="object-contain opacity-45"
+                  style={{ width: '32px', height: '32px' }}
+                  draggable={false}
+                />
+                <p
+                  className="text-white/25 uppercase tracking-[0.5em] whitespace-nowrap"
+                  style={{
+                    fontFamily: "'Pretendard', sans-serif",
+                    fontWeight: 300,
+                    fontSize: '11px',
+                  }}
+                >
+                  {mode === 'pinching' ? 'Pinching Root' : 'Spatial Research'}
+                </p>
+              </motion.div>
+
+              {/* Role Selector — 커스텀 포함 (research 모드일 때만) */}
+              {mode === 'research' && (
               <div className="w-full max-w-[520px] px-4 flex flex-col items-center gap-2">
                 <div className="overflow-x-auto mobile-scroll w-full">
                   <div className="flex items-center gap-1.5 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1 min-w-max mx-auto w-fit">
@@ -705,21 +932,33 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </div>
+              )}
 
               <InputWithHover inputRef={inputRef} value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && submit()}
-                onSubmit={submit} />
+                onSubmit={submit}
+                placeholder={mode === 'pinching'
+                  ? '상황이나 아이디어를 구체적으로 입력하세요...'
+                  : '상황이나 아이디어 또는 키워드를 구체적으로 입력하세요.'} />
 
               <div className="flex items-center gap-3 sm:gap-6">
-                <button onClick={handleLoadFromFile}
+                <button onClick={() => setStatus('landing')}
                   className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
-                  Open
+                  Home
                 </button>
-                <button onClick={() => setShowSaved(true)}
-                  className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
-                  History
-                </button>
+                {mode === 'research' && (
+                  <>
+                    <button onClick={handleLoadFromFile}
+                      className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
+                      Open
+                    </button>
+                    <button onClick={() => setShowSaved(true)}
+                      className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
+                      History
+                    </button>
+                  </>
+                )}
               </div>
             </motion.div>
           )}

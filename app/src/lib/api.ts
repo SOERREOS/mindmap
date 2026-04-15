@@ -239,14 +239,17 @@ export const conductResearch = async (
     ? `"${seeds.join('"과 "')}"의 교차 연관 관계`
     : `"${keyword}"`;
 
-  const prompt = `당신은 유능한 브레인스토밍 파트너입니다.
+  const prompt = `당신은 탁월한 브레인스토밍 파트너이자 전략 컨설턴트입니다.
 지금 당신은 [${userRole}]과 함께 작업하고 있습니다.
 
 사용자 입력: "${subject}"
 
-위 입력이 단순 키워드일 수도 있고, 구체적인 상황·아이디어·고민일 수도 있습니다.
-먼저 입력의 맥락을 파악하고, [${userRole}]의 관점에서 가장 유용하고 창의적인 연관 개념 5개를 추출하세요.
-각 개념마다 5개의 하위 키워드를 생성하되, 사용자의 구체적인 상황이 반영된 실질적인 인사이트를 제공하세요.
+규칙 (반드시 준수):
+1. 단순 연관 키워드 나열 금지 — 표면적인 단어 조합이 아닌, 실제 현장에서 바로 써먹을 수 있는 핵심 인사이트를 제공하세요.
+2. [${userRole}]의 실제 고민·목표·상황을 깊이 이해하고, 그 관점에서 가장 필요한 개념 5개를 선정하세요.
+3. 각 개념의 하위 노드는 "이걸 몰랐으면 손해"라는 수준의 구체적 정보여야 합니다.
+4. 비주류 관점, 반직관적 아이디어, 즉시 실행 가능한 액션을 포함하세요.
+5. summary는 "왜 중요한가"를 명확히 설명해야 합니다.
 
 반드시 아래 JSON 형식으로만 답변하세요:
 {
@@ -254,14 +257,14 @@ export const conductResearch = async (
     {
       "label": "주요개념",
       "category": "기술/문화/비즈니스/과학/예술/사회 중 택1",
-      "summary": "한 문장 요약 (사용자 상황에 맞게 구체적으로)",
+      "summary": "왜 이 개념이 [${userRole}]에게 핵심인지 한 문장으로 (구체적 이유 포함)",
       "children": [
         {
           "label": "하위1",
-          "summary": "설명",
-          "inspiration": "창작자를 위한 한 줄 영감",
-          "actionItems": ["실행 아이디어1", "실행 아이디어2"],
-          "questions": ["생각해볼 질문1"]
+          "summary": "실질적인 설명 (사례·데이터·원리 포함)",
+          "inspiration": "[${userRole}]의 관점에서 당장 응용할 수 있는 아이디어",
+          "actionItems": ["지금 바로 할 수 있는 행동1", "이번 주 안에 시도할 행동2"],
+          "questions": ["이 개념을 더 깊이 파고들게 만드는 날카로운 질문"]
         }
       ]
     }
@@ -276,19 +279,23 @@ export const conductResearch = async (
  * 단순 노드 확장
  */
 export const expandNode = async (nodeLabel: string, userRole = "사용자"): Promise<ResearchSubNode[]> => {
-  const prompt = `[${userRole}]의 관점에서 "${nodeLabel}"에 대해 더 구체적이고 창의적인 하위 개념 5개를 추출하세요.
-창작자에게 영감을 줄 수 있는 필드들을 포함해 주세요.
+  const prompt = `[${userRole}]의 관점에서 "${nodeLabel}"의 핵심을 더 깊이 파고들어 5개의 새로운 노드를 생성하세요.
+
+규칙:
+- 겉으로 드러나지 않은 이면의 원리, 반직관적 사실, 실전 적용 방법을 포함하세요.
+- [${userRole}]에게 "이런 관점은 몰랐네"라고 느끼게 만드는 수준의 인사이트여야 합니다.
+- 단순 하위 개념 나열 금지. 각 노드는 독립적인 가치를 가져야 합니다.
 
 반드시 아래 JSON 형식으로만 답변하세요:
 {
   "nodes": [
     {
-      "label": "개념1",
-      "summary": "설명",
-      "inspiration": "창작 영감",
-      "actionItems": ["실행 아이디어"],
-      "questions": ["새로운 질문"],
-      "details": "심층 설명"
+      "label": "핵심 개념명 (간결하게)",
+      "summary": "이 개념이 왜 중요한지 + 구체적인 원리나 사례",
+      "inspiration": "[${userRole}]이 이걸 어떻게 활용할 수 있는지 한 줄 아이디어",
+      "actionItems": ["지금 바로 해볼 수 있는 구체적 행동", "한 단계 더 나아갈 방법"],
+      "questions": ["이 개념에서 파생되는 핵심 질문"],
+      "details": "더 깊은 배경 지식이나 연구·사례"
     }
   ]
 }`;
@@ -301,27 +308,33 @@ export const expandNode = async (nodeLabel: string, userRole = "사용자"): Pro
  * 사용자 입력 기반의 조종된 확장 (Steered Expansion)
  */
 export const steeredExpandNode = async (
-  nodeLabel: string, 
-  userPrompt: string, 
+  nodeLabel: string,
+  userPrompt: string,
   userRole = "사용자",
   deep = false
 ): Promise<ResearchSubNode[]> => {
   const prompt = `지금 당신은 [${userRole}]과 함께 "${nodeLabel}"에 대해 브레인스토밍 중입니다.
-[${userRole}]이 다음과 같은 요청을 했습니다: "${userPrompt}"
+[${userRole}]의 요청: "${userPrompt}"
 
-이 요청에 응답하여 "${nodeLabel}"에서 뻗어 나오는 5개의 새로운 아이디어 노드를 생성하세요.
-창작자에게 실질적인 도움이 되는 구체적인 정보를 포함해야 합니다.
+이 요청의 의도를 정확히 파악하세요:
+- 탐색 방향을 묻는다면: 그 방향으로 가장 유용한 노드들을 생성
+- 아이디어를 요청한다면: 즉시 실행 가능하고 독창적인 아이디어 제공
+- 이미지/비주얼 묘사를 요청한다면: 시각적으로 상상할 수 있는 구체적 묘사와 활용 아이디어
+- 분석을 요청한다면: 핵심 분석 결과와 인사이트
+- 그 외 어떤 요청이든: 요청 의도에 최대한 충실하게 응답
+
+"${nodeLabel}"에서 뻗어 나오는 5개의 노드를 생성하세요.
 
 반드시 아래 JSON 형식으로만 답변하세요:
 {
   "nodes": [
     {
-      "label": "아이디어1",
-      "summary": "설명",
-      "inspiration": "이 아이디어를 어떻게 창작에 쓸지 한 줄 팁",
-      "actionItems": ["당장 해볼 수 있는 것"],
-      "questions": ["확장을 위한 질문"],
-      "details": "구체적인 원리나 데이터"
+      "label": "응답 핵심 (간결하게)",
+      "summary": "요청에 대한 구체적이고 실질적인 응답 내용",
+      "inspiration": "[${userRole}]이 이걸 어떻게 활용·적용할 수 있는지",
+      "actionItems": ["바로 해볼 수 있는 행동", "한 단계 더 나아갈 방법"],
+      "questions": ["이 아이디어에서 더 탐색할 수 있는 질문"],
+      "details": "구체적인 배경 정보나 사례"
     }
   ]
 }`;
@@ -500,13 +513,25 @@ export interface FreeFormResult {
 }
 
 export const freeFormAction = async (userRequest: string, idea: string): Promise<FreeFormResult> => {
-  const prompt = `당신은 아이디어 분석 AI입니다. 사용자 요청에 구체적이고 실질적으로 답변하세요.
+  const prompt = `당신은 아이디어 분석 및 브레인스토밍 전문 AI입니다.
 
-아이디어: "${idea}"
-요청: "${userRequest}"
+아이디어 맥락: "${idea}"
+사용자 요청: "${userRequest}"
+
+요청 유형을 파악하고 최적으로 응답하세요:
+- 조사/리서치 요청 → type: "research", 구체적 팩트·사례·데이터 포함
+- 분석 요청 → type: "analysis", 구조화된 인사이트
+- 아이디어/제안 요청 → type: "suggestions", 즉시 활용 가능한 창의적 제안들
+- 이미지/비주얼 묘사 → type: "research", 생생한 시각적 묘사와 활용 방법
+- 그 외 → type: "answer", 요청에 맞는 최선의 응답
+
+규칙:
+- keyPoints는 "이건 몰랐네"라고 느낄 만큼 구체적이고 실용적이어야 합니다.
+- content는 2-3문장이지만, 핵심을 압축해야 합니다.
+- 평범한 내용 금지. 해당 분야의 전문가처럼 답변하세요.
 
 반드시 아래 JSON 형식으로만 답변하세요:
-{"type":"research","title":"제목","content":"2-3문장 핵심 내용","keyPoints":["구체적 포인트1","구체적 포인트2","구체적 포인트3"]}`;
+{"type":"research","title":"응답 제목 (명확하고 구체적으로)","content":"핵심 내용 2-3문장 (구체적 사례·수치·원리 포함)","keyPoints":["실용적 포인트1","실용적 포인트2","실용적 포인트3","실용적 포인트4"]}`;
 
   try {
     return await callGemini(prompt);

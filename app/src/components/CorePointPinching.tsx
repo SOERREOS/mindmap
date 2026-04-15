@@ -77,6 +77,7 @@ function PinchNode({ data, id }: NodeProps) {
   const [inputVal, setInputVal] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [history, setHistory] = useState<string[]>([]);
   const st = VARIANT_STYLES[d.variant];
   const isRoot = d.variant === 'root';
   const isSuggestion = d.variant === 'suggestion';
@@ -88,8 +89,10 @@ function PinchNode({ data, id }: NodeProps) {
 
   const handleSubmit = async () => {
     if (!inputVal.trim() || !d.onPinch) return;
+    const query = inputVal.trim();
+    setHistory(prev => [...prev, query]);
     setSubmitting(true);
-    await d.onPinch(id, `${d.label}: ${inputVal.trim()}`);
+    await d.onPinch(id, `${d.label}: ${query}`);
     setInputVal('');
     setSubmitting(false);
     setExpanded(false);
@@ -244,24 +247,43 @@ function PinchNode({ data, id }: NodeProps) {
           {expanded && (
             <motion.div key="exp" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
               <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: `1px solid ${isResult ? 'rgba(251,191,36,0.15)' : 'rgba(255,255,255,0.08)'}` }}>
+                {/* 이전 입력 기록 */}
+                {history.length > 0 && (
+                  <div style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    {history.slice(-2).map((h, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '5px' }}>
+                        <span style={{ fontSize: '9px', color: isResult ? 'rgba(251,191,36,0.35)' : 'rgba(255,255,255,0.22)', marginTop: '1px', flexShrink: 0 }}>↳</span>
+                        <span style={{ fontSize: '10px', color: isResult ? 'rgba(254,243,199,0.5)' : 'rgba(255,255,255,0.4)', lineHeight: 1.4 }}>{h}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {submitting ? (
                   <div style={{ fontSize: '11px', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>⟳ 분석 중...</div>
                 ) : (
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <input
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end' }}>
+                    <textarea
                       autoFocus
-                      type="text"
+                      rows={1}
                       value={inputVal}
-                      onChange={e => setInputVal(e.target.value)}
-                      onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') handleSubmit(); if (e.key === 'Escape') setExpanded(false); }}
+                      onChange={e => {
+                        setInputVal(e.target.value);
+                        e.target.style.height = 'auto';
+                        e.target.style.height = e.target.scrollHeight + 'px';
+                      }}
+                      onKeyDown={e => {
+                        e.stopPropagation();
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
+                        if (e.key === 'Escape') setExpanded(false);
+                      }}
                       onClick={e => e.stopPropagation()}
-                      placeholder={isResult ? '이 결과를 바탕으로 더 파고들기... (Enter)' : '더 파고들어 보세요... (Enter 전송, Esc 닫기)'}
-                      style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: isResult ? 'rgba(254,243,199,0.75)' : 'rgba(255,255,255,0.75)', fontSize: '11px' }}
+                      placeholder={isResult ? '이 결과를 바탕으로 파고들기, 아이디어 요청, 분석 등...' : '파고들기, 아이디어, 이미지 묘사 등 자유롭게...'}
+                      style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: isResult ? 'rgba(254,243,199,0.75)' : 'rgba(255,255,255,0.75)', fontSize: '11px', resize: 'none', overflow: 'hidden', lineHeight: 1.5, minHeight: '18px' }}
                     />
                     {inputVal.trim() && (
                       <button
                         onClick={e => { e.stopPropagation(); handleSubmit(); }}
-                        style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '4px', color: 'rgba(255,255,255,0.7)', fontSize: '10px', padding: '2px 7px', cursor: 'pointer' }}
+                        style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '4px', color: 'rgba(255,255,255,0.7)', fontSize: '10px', padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}
                       >→</button>
                     )}
                   </div>
@@ -274,7 +296,10 @@ function PinchNode({ data, id }: NodeProps) {
       {/* hint for expandable nodes when not expanded */}
       {hasInput && !expanded && (
         <div style={{ marginTop: '8px', fontSize: '9px', color: isResult ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.18)', letterSpacing: '0.1em' }}>
-          {isResult ? '클릭하여 추가 탐색 ↓' : '클릭하여 파고들기 ↓'}
+          {history.length > 0
+            ? <span>↳ <span style={{ opacity: 0.7 }}>{history[history.length - 1]}</span></span>
+            : (isResult ? '클릭하여 추가 탐색 ↓' : '클릭하여 파고들기 ↓')
+          }
         </div>
       )}
 
@@ -544,33 +569,55 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
         >
           {saveMsg ?? '💾 저장'}
         </button>
+        {/* 파일에서 불러오기 */}
         <button
-          onClick={() => {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (!stored) { setSaveMsg('저장된 세션 없음'); setTimeout(() => setSaveMsg(null), 2000); return; }
-            try {
-              const parsed = JSON.parse(stored);
-              const rehydrate = (ns: Node[]) => ns.map(n => {
-                const v = (n.data as unknown as PinchNodeData).variant;
-                return {
-                  ...n,
-                  data: {
-                    ...n.data,
-                    onPinch: (v === 'question' || v === 'result') ? handlePinch : undefined,
-                    onExecuteResearch: v === 'suggestion' ? handleExecuteResearch : undefined,
-                  },
-                };
-              });
-              setNodes(rehydrate(parsed.nodes));
-              setEdges(parsed.edges);
-              setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
-              setSaveMsg('✓ 불러옴');
-              setTimeout(() => setSaveMsg(null), 2000);
-            } catch { setSaveMsg('불러오기 오류'); setTimeout(() => setSaveMsg(null), 2000); }
+          onClick={async () => {
+            const rehydrate = (ns: Node[]) => ns.map(n => {
+              const v = (n.data as unknown as PinchNodeData).variant;
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  onPinch: (v === 'question' || v === 'result') ? handlePinch : undefined,
+                  onExecuteResearch: v === 'suggestion' ? handleExecuteResearch : undefined,
+                },
+              };
+            });
+
+            if ('showOpenFilePicker' in window) {
+              try {
+                const [handle] = await (window as any).showOpenFilePicker({
+                  types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
+                });
+                const file = await handle.getFile();
+                const parsed = JSON.parse(await file.text());
+                setNodes(rehydrate(parsed.nodes));
+                setEdges(parsed.edges ?? []);
+                setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
+                setSaveMsg('✓ 불러옴');
+                setTimeout(() => setSaveMsg(null), 2000);
+                return;
+              } catch (e: any) { if (e.name === 'AbortError') return; }
+            }
+            // 폴백: input[file]
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = '.json';
+            input.onchange = async () => {
+              const file = input.files?.[0]; if (!file) return;
+              try {
+                const parsed = JSON.parse(await file.text());
+                setNodes(rehydrate(parsed.nodes));
+                setEdges(parsed.edges ?? []);
+                setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
+                setSaveMsg('✓ 불러옴');
+                setTimeout(() => setSaveMsg(null), 2000);
+              } catch { setSaveMsg('불러오기 오류'); setTimeout(() => setSaveMsg(null), 2000); }
+            };
+            input.click();
           }}
           style={btnStyle('save')}
         >
-          📂 가져오기
+          📂 불러오기
         </button>
 
         <div style={{ flex: 1 }} />
@@ -636,20 +683,29 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           background: 'rgba(5,5,15,0.75)',
           backdropFilter: 'blur(20px)',
           border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: '999px',
+          borderRadius: '20px',
           display: 'flex',
-          alignItems: 'center',
-          padding: '0 6px 0 20px',
+          alignItems: 'flex-end',
+          padding: '6px 6px 6px 20px',
           gap: '8px',
           boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
         }}>
-          <span style={{ fontSize: '14px', opacity: 0.5 }}>✦</span>
-          <input
-            type="text"
+          <span style={{ fontSize: '14px', opacity: 0.5, paddingBottom: '10px' }}>✦</span>
+          <textarea
+            rows={1}
             value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !chatLoading) handleChatSubmit(); }}
-            placeholder={globalLoading || chatLoading ? '처리 중...' : '조사해줘, 분석해줘, 경쟁자 찾아줘 등 자유롭게 입력하세요'}
+            onChange={e => {
+              setChatInput(e.target.value);
+              e.target.style.height = 'auto';
+              e.target.style.height = e.target.scrollHeight + 'px';
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey && !chatLoading) {
+                e.preventDefault();
+                handleChatSubmit();
+              }
+            }}
+            placeholder={globalLoading || chatLoading ? '처리 중...' : '조사해줘, 분석해줘, 아이디어 줘, 이미지로 표현해줘 등 자유롭게 입력하세요'}
             disabled={chatLoading || globalLoading}
             style={{
               flex: 1,
@@ -658,7 +714,11 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
               outline: 'none',
               color: 'rgba(255,255,255,0.8)',
               fontSize: '13px',
-              padding: '14px 0',
+              padding: '10px 0',
+              resize: 'none',
+              overflow: 'hidden',
+              lineHeight: 1.55,
+              minHeight: '40px',
             }}
           />
           <button

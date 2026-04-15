@@ -355,41 +355,58 @@ function SavedMapsPanel({ onLoad, onClose }: { onLoad: (map: SavedMap) => void; 
   );
 }
 
-// ── 호버 반응형 검색창 ────────────────────────────────────────
+// ── 호버 반응형 검색창 (자동 높이 확장 textarea) ──────────────
 function InputWithHover({
   inputRef, value, onChange, onKeyDown, onSubmit, placeholder,
 }: {
-  inputRef: React.RefObject<HTMLInputElement | null>;
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSubmit: () => void;
   placeholder?: string;
 }) {
   const [hovered, setHovered] = useState(false);
+
+  const autoResize = (el: HTMLTextAreaElement) => {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    autoResize(e.target);
+    onChange(e);
+  };
+
   return (
-    <div className="w-full max-w-[480px] px-4 flex flex-col gap-3">
+    <div className="w-full max-w-[520px] px-4 flex flex-col gap-3">
       <motion.div
         animate={{ scale: hovered ? 1.02 : 1 }}
         transition={{ type: 'spring', stiffness: 340, damping: 28 }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
         style={{
-          borderRadius: '9999px',
+          borderRadius: '20px',
           boxShadow: hovered
             ? '0 0 0 1px rgba(255,255,255,0.18), 0 0 30px rgba(255,255,255,0.06), 0 8px 40px rgba(0,0,0,0.5)'
             : '0 0 0 1px rgba(255,255,255,0.07), 0 8px 40px rgba(0,0,0,0.4)',
           transition: 'box-shadow 0.3s ease',
         }}>
-        <input ref={inputRef} value={value} onChange={onChange} onKeyDown={onKeyDown}
+        <textarea
+          ref={inputRef}
+          value={value}
+          onChange={handleChange}
+          onKeyDown={onKeyDown}
           placeholder={placeholder ?? "단어를 입력하세요..."}
-          className="bg-white/[0.04] border border-white/10 rounded-full px-8 py-4 text-lg text-white outline-none focus:border-white/22 transition-colors w-full text-center placeholder:text-white/16"
+          rows={1}
+          className="bg-white/[0.04] border border-white/10 rounded-[20px] px-8 py-4 text-base text-white outline-none focus:border-white/22 transition-colors w-full placeholder:text-white/16 resize-none overflow-hidden leading-relaxed"
+          style={{ minHeight: '58px' }}
         />
       </motion.div>
       {/* 모바일 전용 검색 버튼 */}
       <button
         onClick={onSubmit}
-        className="sm:hidden w-full py-4 rounded-full bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
+        className="sm:hidden w-full py-4 rounded-2xl bg-white text-black font-bold text-sm tracking-widest active:scale-95 transition-transform"
       >
         탐색하기
       </button>
@@ -602,7 +619,7 @@ export default function App() {
   const [pinchingIdea, setPinchingIdea] = useState('');
   // ----------------------------------
 
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const mindmapRef = useRef<MindmapHandle | null>(null);
 
   useEffect(() => {
@@ -832,7 +849,15 @@ export default function App() {
             <motion.div key="idle"
               initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.96 }} transition={{ duration: 0.5 }}
-              className="flex flex-col items-center justify-center h-full gap-5 px-4 safe-top safe-bottom">
+              className="relative flex flex-col items-center justify-center h-full gap-5 px-4 safe-top safe-bottom">
+
+              {/* Home 버튼 — 왼쪽 상단 */}
+              <div className="absolute top-5 left-5">
+                <button onClick={() => setStatus('landing')}
+                  className="text-white/30 hover:text-white/70 text-[10px] tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 py-2.5 backdrop-blur-md active:scale-95">
+                  Home
+                </button>
+              </div>
 
               {/* 모드 아이콘 (작게) + 툴 이름 */}
               <motion.div
@@ -936,30 +961,24 @@ export default function App() {
 
               <InputWithHover inputRef={inputRef} value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && submit()}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
                 onSubmit={submit}
                 placeholder={mode === 'pinching'
                   ? '상황이나 아이디어를 구체적으로 입력하세요...'
-                  : '상황이나 아이디어 또는 키워드를 구체적으로 입력하세요.'} />
+                  : '상황이나 아이디어 또는 키워드를 구체적으로 입력하세요.\nShift+Enter로 줄 바꿈, Enter로 탐색 시작'} />
 
-              <div className="flex items-center gap-3 sm:gap-6">
-                <button onClick={() => setStatus('landing')}
-                  className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
-                  Home
-                </button>
-                {mode === 'research' && (
-                  <>
-                    <button onClick={handleLoadFromFile}
-                      className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
-                      Open
-                    </button>
-                    <button onClick={() => setShowSaved(true)}
-                      className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
-                      History
-                    </button>
-                  </>
-                )}
-              </div>
+              {mode === 'research' && (
+                <div className="flex items-center gap-3 sm:gap-6">
+                  <button onClick={handleLoadFromFile}
+                    className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
+                    Open
+                  </button>
+                  <button onClick={() => setShowSaved(true)}
+                    className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
+                    History
+                  </button>
+                </div>
+              )}
             </motion.div>
           )}
 

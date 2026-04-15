@@ -379,6 +379,7 @@ const MindmapContent = forwardRef<MindmapHandle, {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [expandingId, setExpandingId] = useState<string | null>(null);
   const [cmdValue, setCmdValue] = useState('');
+  const [cmdHistory, setCmdHistory] = useState<{ nodeId: string; query: string }[]>([]);
   const { fitView, setCenter } = useReactFlow();
 
   const originalEdgesRef = useRef<Edge[]>([]);
@@ -601,30 +602,61 @@ const MindmapContent = forwardRef<MindmapHandle, {
               initial={{ opacity: 0, y: 15, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 15, scale: 0.95 }}
-              className="absolute bottom-24 sm:bottom-10 left-3 right-3 sm:left-1/2 sm:right-auto z-[200] sm:w-[500px] sm:-translate-x-1/2"
+              className="absolute bottom-24 sm:bottom-10 left-3 right-3 sm:left-1/2 sm:right-auto z-[200] sm:w-[560px] sm:-translate-x-1/2"
             >
-              <div className="bg-[#0f0f23]/90 backdrop-blur-xl border border-white/10 rounded-2xl sm:rounded-full p-2 flex items-center shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
-                <input
+              {/* 이전 입력 기록 */}
+              {cmdHistory.filter(h => h.nodeId === selectedId).length > 0 && (
+                <div className="mb-2 flex flex-col gap-1 items-end">
+                  {cmdHistory.filter(h => h.nodeId === selectedId).slice(-3).map((h, i) => (
+                    <div key={i} className="inline-flex items-center gap-2 bg-white/[0.07] backdrop-blur-md border border-white/8 rounded-2xl px-4 py-1.5 max-w-[90%]">
+                      <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.15em' }}>입력</span>
+                      <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)' }}>{h.query}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="bg-[#0f0f23]/90 backdrop-blur-xl border border-white/10 rounded-2xl p-2 flex items-end gap-2 shadow-[0_20px_60px_rgba(0,0,0,0.5)]">
+                <textarea
                   value={cmdValue}
-                  onChange={(e) => setCmdValue(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' && cmdValue.trim()) { handleExpand(selectedNode, cmdValue); setCmdValue(''); } }}
-                  placeholder={`더 탐색할 방향은?`}
-                  className="flex-1 bg-transparent border-none outline-none text-white px-4 sm:px-6 py-3 text-sm placeholder:text-white/25"
+                  rows={1}
+                  onChange={(e) => {
+                    setCmdValue(e.target.value);
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey && cmdValue.trim()) {
+                      e.preventDefault();
+                      setCmdHistory(prev => [...prev, { nodeId: selectedId!, query: cmdValue.trim() }]);
+                      handleExpand(selectedNode, cmdValue);
+                      setCmdValue('');
+                    }
+                  }}
+                  placeholder="탐색 방향, 아이디어 요청, 이미지 묘사 등 자유롭게 입력하세요"
+                  className="flex-1 bg-transparent border-none outline-none text-white px-4 sm:px-6 py-3 text-sm placeholder:text-white/25 resize-none overflow-hidden leading-relaxed"
+                  style={{ minHeight: '46px' }}
                 />
                 <button
-                  onClick={() => { if (cmdValue.trim()) { handleExpand(selectedNode, cmdValue); setCmdValue(''); } }}
-                  className="bg-white/10 hover:bg-white/20 active:scale-95 text-white px-4 sm:px-6 py-3 rounded-xl sm:rounded-full text-xs font-bold tracking-widest transition-all uppercase shrink-0"
+                  onClick={() => {
+                    if (cmdValue.trim()) {
+                      setCmdHistory(prev => [...prev, { nodeId: selectedId!, query: cmdValue.trim() }]);
+                      handleExpand(selectedNode, cmdValue);
+                      setCmdValue('');
+                    }
+                  }}
+                  className="bg-white/10 hover:bg-white/20 active:scale-95 text-white px-4 sm:px-6 py-3 rounded-xl text-xs font-bold tracking-widest transition-all uppercase shrink-0"
                 >
-                  Expand
+                  실행
                 </button>
+              </div>
+              <div className="mt-1.5 text-center" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.2)', letterSpacing: '0.2em' }}>
+                Enter 실행 · Shift+Enter 줄바꿈 · 더블탭: 자동 확장
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="hidden sm:block absolute bottom-6 left-6 text-white/10 text-[10px] tracking-[0.4em] pointer-events-none uppercase">
-          더블탭: 자동 확장 · 싱글탭: 리서치 데이터
-        </div>
       </div>
     </SelectCtx.Provider>
   );

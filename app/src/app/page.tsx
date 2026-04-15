@@ -12,13 +12,6 @@ import { rollDice } from '@/lib/dice';
 import { deleteMap, formatDate, loadMaps, saveMap, type SavedMap } from '@/lib/storage';
 import type { Edge, Node } from '@xyflow/react';
 
-// ── 사용자 역할 정의 ───────────────────────────────────────────
-const USER_ROLES = [
-  { id: 'designer', label: '디자이너', emoji: '🎨' },
-  { id: 'marketer', label: '마케터', emoji: '📈' },
-  { id: 'writer', label: '작가', emoji: '✍️' },
-];
-
 // ── 해킹 주사위 ───────────────────────────────────────────────
 const HACK_CHARS = '0123456789!@#$%^&*()[]{}<>|?/~ABCDEFGHIJKLMNabcdefghijklmn가나다라마바사아자';
 
@@ -367,6 +360,7 @@ function InputWithHover({
   placeholder?: string;
 }) {
   const [hovered, setHovered] = useState(false);
+  const rows = Math.max(1, (placeholder ?? '').split('\n').length);
 
   const autoResize = (el: HTMLTextAreaElement) => {
     el.style.height = 'auto';
@@ -398,9 +392,9 @@ function InputWithHover({
           onChange={handleChange}
           onKeyDown={onKeyDown}
           placeholder={placeholder ?? "단어를 입력하세요..."}
-          rows={1}
+          rows={rows}
           className="bg-white/[0.04] border border-white/10 rounded-[20px] px-8 py-4 text-base text-white outline-none focus:border-white/22 transition-colors w-full placeholder:text-white/16 resize-none overflow-hidden leading-relaxed"
-          style={{ minHeight: '58px' }}
+          style={{ minHeight: `${32 + rows * 26}px` }}
         />
       </motion.div>
       {/* 모바일 전용 검색 버튼 */}
@@ -609,14 +603,10 @@ export default function App() {
   const [otpResult, setOtpResult] = useState<{ code: string; expiresIn: string } | null>(null);
   const [otpLoading, setOtpLoading] = useState(false);
   const [exportMode, setExportMode] = useState(false);
-  // --- New Creative Features State ---
-  const [userRole, setUserRole] = useState(USER_ROLES[0].label);
-  const [customRoleInput, setCustomRoleInput] = useState('');
-  const [showCustomInput, setShowCustomInput] = useState(false);
-  const customRoleRef = useRef<HTMLInputElement>(null);
   const [selectedNodeData, setSelectedNodeData] = useState<(ResearchSubNode | ResearchMainNode) | null>(null);
   const [aiMessage, setAiMessage] = useState('');
   const [pinchingIdea, setPinchingIdea] = useState('');
+  const [pinchingLoadedData, setPinchingLoadedData] = useState<{ nodes: Node[]; edges: Edge[] } | null>(null);
   // ----------------------------------
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -632,7 +622,7 @@ export default function App() {
     setAiMessage('가장 적합한 지능형 엔진을 찾는 중..');
     setSelectedNodeData(null);
     try {
-      const results = await conductResearch(kw, userRole, (msg) => setAiMessage(msg));
+      const results = await conductResearch(kw, undefined, (msg) => setAiMessage(msg));
       setData({ root: kw, children: results });
       setStatus('mapping');
     } catch (err) {
@@ -664,7 +654,7 @@ export default function App() {
   };
 
   const reset = () => {
-    setStatus('landing'); setData(null); setSavedMapState(null); setSaved(false); setSelectedNodeData(null);
+    setStatus('landing'); setData(null); setSavedMapState(null); setSaved(false); setSelectedNodeData(null); setPinchingLoadedData(null);
     setTimeout(() => inputRef.current?.focus(), 80);
   };
 
@@ -719,6 +709,10 @@ export default function App() {
         });
         const file = await handle.getFile();
         const parsed = JSON.parse(await file.text());
+        if (parsed.idea !== undefined && parsed.root === undefined) {
+          alert('이 파일은 Pinching Root 형식입니다. Spatial Research 파일을 선택해주세요.');
+          return;
+        }
         setData({ root: parsed.root, children: parsed.children ?? [] });
         setSavedMapState(parsed.nodes?.length
           ? { nodes: parsed.nodes, edges: parsed.edges ?? [] }
@@ -736,6 +730,10 @@ export default function App() {
       const file = input.files?.[0]; if (!file) return;
       try {
         const parsed = JSON.parse(await file.text());
+        if (parsed.idea !== undefined && parsed.root === undefined) {
+          alert('이 파일은 Pinching Root 형식입니다. Spatial Research 파일을 선택해주세요.');
+          return;
+        }
         setData({ root: parsed.root, children: parsed.children ?? [] });
         setSavedMapState(parsed.nodes?.length
           ? { nodes: parsed.nodes, edges: parsed.edges ?? [] }
@@ -753,6 +751,36 @@ export default function App() {
       ? { nodes: m.nodes as Node[], edges: (m.edges ?? []) as Edge[] }
       : null);
     setStatus('mapping');
+  };
+
+  // Pinching 파일 불러오기
+  const handleLoadPinching = async () => {
+    const loadData = (parsed: any) => {
+      if (parsed.root !== undefined && parsed.idea === undefined) {
+        alert('이 파일은 Spatial Research 형식입니다. Pinching Root 파일을 선택해주세요.');
+        return;
+      }
+      setPinchingIdea(parsed.idea ?? '불러온 맵');
+      setPinchingLoadedData({ nodes: parsed.nodes ?? [], edges: parsed.edges ?? [] });
+      setStatus('pinching');
+    };
+    if ('showOpenFilePicker' in window) {
+      try {
+        const [handle] = await (window as any).showOpenFilePicker({
+          types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
+        });
+        const file = await handle.getFile();
+        loadData(JSON.parse(await file.text()));
+        return;
+      } catch (e: any) { if (e.name === 'AbortError') return; }
+    }
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = async () => {
+      const file = input.files?.[0]; if (!file) return;
+      try { loadData(JSON.parse(await file.text())); } catch { /* ignore */ }
+    };
+    input.click();
   };
 
   // PNG 내보내기
@@ -841,7 +869,7 @@ export default function App() {
 
           {status === 'pinching' && pinchingIdea && (
             <motion.div key="pinching" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full w-full">
-              <CorePointPinching initialIdea={pinchingIdea} onReset={reset} />
+              <CorePointPinching initialIdea={pinchingIdea} onReset={reset} initialData={pinchingLoadedData ?? undefined} />
             </motion.div>
           )}
 
@@ -885,79 +913,6 @@ export default function App() {
                 </p>
               </motion.div>
 
-              {/* Role Selector — 커스텀 포함 (research 모드일 때만) */}
-              {mode === 'research' && (
-              <div className="w-full max-w-[520px] px-4 flex flex-col items-center gap-2">
-                <div className="overflow-x-auto mobile-scroll w-full">
-                  <div className="flex items-center gap-1.5 bg-white/[0.03] backdrop-blur-md border border-white/5 rounded-full p-1 min-w-max mx-auto w-fit">
-                    {USER_ROLES.map(role => (
-                      <button
-                        key={role.id}
-                        onClick={() => { setUserRole(role.label); setShowCustomInput(false); }}
-                        className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${userRole === role.label && !showCustomInput ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
-                      >
-                        <span>{role.emoji}</span>
-                        {role.label}
-                      </button>
-                    ))}
-                    <button
-                      onClick={() => {
-                        setShowCustomInput(true);
-                        setTimeout(() => customRoleRef.current?.focus(), 50);
-                      }}
-                      className={`px-3 py-1.5 rounded-full text-[10px] sm:text-[11px] font-bold tracking-wider transition-all flex items-center gap-1.5 whitespace-nowrap ${showCustomInput ? 'bg-white text-black shadow-lg shadow-white/10' : 'text-white/40 hover:text-white/60 hover:bg-white/5'}`}
-                    >
-                      <span>✏️</span>
-                      커스텀
-                    </button>
-                  </div>
-                </div>
-                <AnimatePresence>
-                  {showCustomInput && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0, y: -4 }}
-                      animate={{ opacity: 1, height: 'auto', y: 0 }}
-                      exit={{ opacity: 0, height: 0, y: -4 }}
-                      transition={{ duration: 0.2 }}
-                      className="w-full max-w-[320px] overflow-hidden"
-                    >
-                      <div className="flex items-center gap-2 bg-white/[0.04] border border-white/10 rounded-full px-4 py-1.5 mt-1">
-                        <input
-                          ref={customRoleRef}
-                          value={customRoleInput}
-                          onChange={e => setCustomRoleInput(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && customRoleInput.trim()) {
-                              setUserRole(customRoleInput.trim());
-                              setShowCustomInput(false);
-                            }
-                            if (e.key === 'Escape') setShowCustomInput(false);
-                          }}
-                          placeholder="직접 입력 (예: 스타트업 창업자)"
-                          className="flex-1 bg-transparent text-white text-[12px] outline-none placeholder:text-white/20"
-                        />
-                        <button
-                          onClick={() => {
-                            if (customRoleInput.trim()) {
-                              setUserRole(customRoleInput.trim());
-                              setShowCustomInput(false);
-                            }
-                          }}
-                          className="text-white/50 hover:text-white text-[10px] tracking-widest font-bold uppercase transition-colors whitespace-nowrap active:scale-95"
-                        >
-                          적용
-                        </button>
-                      </div>
-                      {userRole && !USER_ROLES.find(r => r.label === userRole) && (
-                        <p className="text-center text-[10px] text-white/30 mt-1.5 tracking-wider">
-                          현재: <span className="text-white/60">{userRole}</span>
-                        </p>
-                      )}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-              )}
 
               <InputWithHover inputRef={inputRef} value={inputValue}
                 onChange={e => setInputValue(e.target.value)}
@@ -967,18 +922,19 @@ export default function App() {
                   ? '상황이나 아이디어를 구체적으로 입력하세요...'
                   : '상황이나 아이디어 또는 키워드를 구체적으로 입력하세요.\nShift+Enter로 줄 바꿈, Enter로 탐색 시작'} />
 
-              {mode === 'research' && (
-                <div className="flex items-center gap-3 sm:gap-6">
-                  <button onClick={handleLoadFromFile}
-                    className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
-                    Open
-                  </button>
+              <div className="flex items-center gap-3 sm:gap-6">
+                <button
+                  onClick={mode === 'pinching' ? handleLoadPinching : handleLoadFromFile}
+                  className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
+                  Open
+                </button>
+                {mode === 'research' && (
                   <button onClick={() => setShowSaved(true)}
                     className="text-white/30 hover:text-white/70 text-[10px] sm:text-[11px] tracking-[0.25em] sm:tracking-[0.3em] uppercase transition-all border border-white/10 hover:border-white/30 rounded-full px-5 sm:px-8 py-3 backdrop-blur-md active:scale-95">
                     History
                   </button>
-                </div>
-              )}
+                )}
+              </div>
             </motion.div>
           )}
 
@@ -1001,7 +957,7 @@ export default function App() {
                 exportMode={exportMode}
                 savedNodes={savedMapState?.nodes}
                 savedEdges={savedMapState?.edges}
-                userRole={userRole}
+                userRole="사용자"
                 onSelectNode={(node: any) => setSelectedNodeData(node)}
               />
               {/* PC 전용 Back 버튼 */}
@@ -1019,7 +975,7 @@ export default function App() {
       {/* Research Sidebar */}
       <ResearchSidebar 
         node={selectedNodeData} 
-        userRole={userRole}
+        userRole="사용자"
         onClose={() => setSelectedNodeData(null)} 
       />
 

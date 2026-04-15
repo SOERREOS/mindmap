@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { toPng } from 'html-to-image';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ReactFlow,
@@ -59,6 +60,7 @@ interface PinchNodeData {
   // callbacks
   onPinch?: (parentId: string, question: string) => void;
   onExecuteResearch?: (nodeId: string, topic: string) => void;
+  onEdit?: (nodeId: string, newLabel: string) => void;
   executing?: boolean;
 }
 
@@ -78,6 +80,9 @@ function PinchNode({ data, id }: NodeProps) {
   const [expanded, setExpanded] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [editVal, setEditVal] = useState('');
+  const editRef = useRef<HTMLTextAreaElement>(null);
   const st = VARIANT_STYLES[d.variant];
   const isRoot = d.variant === 'root';
   const isSuggestion = d.variant === 'suggestion';
@@ -103,7 +108,14 @@ function PinchNode({ data, id }: NodeProps) {
       initial={{ scale: 0.72, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       transition={{ type: 'spring', stiffness: 280, damping: 22 }}
-      onClick={() => { if (hasInput) setExpanded(v => !v); }}
+      onClick={() => { if (hasInput && !editing) setExpanded(v => !v); }}
+      onDoubleClick={e => {
+        if (!d.onEdit) return;
+        e.stopPropagation();
+        setEditVal(d.label);
+        setEditing(true);
+        setTimeout(() => { editRef.current?.focus(); editRef.current?.select(); }, 30);
+      }}
       style={{
         width: isRoot ? 300 : isAnalysis ? 400 : isResult ? 320 : isPerspective ? 340 : 260,
         borderRadius: isRoot ? '20px' : '14px',
@@ -205,10 +217,42 @@ function PinchNode({ data, id }: NodeProps) {
           {d.label}
         </div>
       ) : (
-        /* Default: label text */
-        <div style={{ fontSize: isRoot ? '14px' : '12.5px', fontWeight: isRoot ? 700 : 500, lineHeight: 1.6, color: st.text, wordBreak: 'keep-all' }}>
-          {d.label}
-        </div>
+        /* Default: label text (double-click to edit if onEdit provided) */
+        editing ? (
+          <textarea
+            ref={editRef}
+            value={editVal}
+            rows={2}
+            onChange={e => setEditVal(e.target.value)}
+            onClick={e => e.stopPropagation()}
+            onKeyDown={e => {
+              e.stopPropagation();
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (editVal.trim()) d.onEdit?.(id, editVal.trim());
+                setEditing(false);
+              }
+              if (e.key === 'Escape') setEditing(false);
+            }}
+            onBlur={() => {
+              if (editVal.trim()) d.onEdit?.(id, editVal.trim());
+              setEditing(false);
+            }}
+            style={{
+              width: '100%', background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.25)',
+              borderRadius: '6px', color: st.text, fontSize: isRoot ? '14px' : '12.5px',
+              fontWeight: isRoot ? 700 : 500, lineHeight: 1.5, padding: '4px 6px',
+              resize: 'none', outline: 'none', fontFamily: 'inherit',
+            }}
+          />
+        ) : (
+          <div
+            style={{ fontSize: isRoot ? '14px' : '12.5px', fontWeight: isRoot ? 700 : 500, lineHeight: 1.6, color: st.text, wordBreak: 'keep-all', cursor: d.onEdit ? 'text' : 'inherit' }}
+            title={d.onEdit ? '더블클릭하여 편집' : undefined}
+          >
+            {d.label}
+          </div>
+        )
       )}
 
       {/* Suggestion: execute button */}
@@ -312,19 +356,29 @@ const nodeTypes = { pinch: PinchNode };
 const edgeTypes = { connection: ConnectionEdge };
 
 // ── Main Component ───────────────────────────────────────────────
-function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: string; onReset: () => void }) {
+function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initialIdea: string; onReset: () => void; initialData?: { nodes: Node[]; edges: Edge[] } }) {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView, getNodes } = useReactFlow();
   const [globalLoading, setGlobalLoading] = useState(false);
+  const [initializing, setInitializing] = useState(!initialData);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatHistory, setChatHistory] = useState<{ id: number; text: string; status: 'pending' | 'done' | 'error' }[]>([]);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [sessionHistory, setSessionHistory] = useState<{ idea: string; savedAt: number; storageKey: string }[]>([]);
+  const [exporting, setExporting] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   const initialized = useRef(false);
   const rootIdeaRef = useRef(initialIdea);
+  const undoStack = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
+  const redoStack = useRef<{ nodes: Node[]; edges: Edge[] }[]>([]);
   const STORAGE_KEY = `pinching-session-${encodeURIComponent(initialIdea).slice(0, 40)}`;
+  const HISTORY_KEY = 'pinching-history';
+
+  // ── stateRef: always-current nodes/edges for undo snapshots ──
+  const stateRef = useRef<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
 
   // ── helpers ──────────────────────────────────────────────────
   const addNodes = useCallback((newNodes: Node[], parentId: string) => {
@@ -355,7 +409,7 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           id: `q-${ts}-${i}`,
           type: 'pinch' as const,
           position: { x: parent.position.x + (i - (n - 1) / 2) * 310, y: parent.position.y + 300 },
-          data: { label: q.description, variant: 'question' as const, onPinch: handlePinch },
+          data: { label: q.description, variant: 'question' as const, onPinch: handlePinch, onEdit: handleEdit },
         })),
         ...res.suggestions.map((s, i) => ({
           id: `s-${ts}-${i}`,
@@ -365,6 +419,7 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
             label: s.description,
             variant: 'suggestion' as const,
             onExecuteResearch: handleExecuteResearch,
+            onEdit: handleEdit,
             executing: false,
           },
         })),
@@ -375,9 +430,11 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           data: {
             label: res.aiPerspective,
             variant: 'perspective' as const,
+            onEdit: handleEdit,
           },
         }] : []),
       ];
+      saveSnapshot();
       addNodes(newNodes, parentId);
     } catch (err) { console.error(err); }
     finally { setGlobalLoading(false); }
@@ -407,8 +464,10 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           summary: res.summary,
           keyPoints: res.keyPoints,
           onPinch: handlePinch,
+          onEdit: handleEdit,
         },
       };
+      saveSnapshot();
       addNodes([resultNode], nodeId);
     } catch (err) { console.error(err); }
     finally {
@@ -437,6 +496,7 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           analysisTitle: res.title,
         },
       };
+      saveSnapshot();
       addNodes([analysisNode], 'root');
     } catch (err) { console.error(err); }
     finally { setGlobalLoading(false); }
@@ -468,8 +528,10 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           summary: res.content,
           keyPoints: res.keyPoints,
           onPinch: handlePinch,
+          onEdit: handleEdit,
         },
       };
+      saveSnapshot();
       addNodes([resultNode], 'root');
       setChatHistory(prev => prev.map(h => h.id === histId ? { ...h, status: 'done' } : h));
     } catch (err) {
@@ -478,21 +540,128 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
     } finally { setChatLoading(false); }
   }, [chatInput, getNodes, addNodes]);
 
+  // ── node label editing ───────────────────────────────────────
+  const handleEdit = useCallback((nodeId: string, newLabel: string) => {
+    setNodes(prev => prev.map(n => n.id === nodeId
+      ? { ...n, data: { ...n.data, label: newLabel } }
+      : n
+    ));
+  }, [setNodes]);
+
+  // ── snapshot / undo / redo ───────────────────────────────────
+  const saveSnapshot = useCallback(() => {
+    undoStack.current = [...undoStack.current.slice(-19), { ...stateRef.current }];
+    redoStack.current = [];
+  }, []);
+
+  const doRehydrate = useCallback((ns: Node[]) => ns.map(n => {
+    const v = (n.data as unknown as PinchNodeData).variant;
+    return {
+      ...n,
+      data: {
+        ...n.data,
+        onPinch: (v === 'question' || v === 'result') ? handlePinch : undefined,
+        onExecuteResearch: v === 'suggestion' ? handleExecuteResearch : undefined,
+        onEdit: handleEdit,
+      },
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [handleEdit]);
+
+  const undo = useCallback(() => {
+    const snap = undoStack.current.pop();
+    if (!snap) return;
+    redoStack.current = [...redoStack.current, { ...stateRef.current }];
+    setNodes(doRehydrate(snap.nodes));
+    setEdges(snap.edges);
+    setTimeout(() => fitView({ duration: 400, padding: 0.18 }), 50);
+  }, [doRehydrate, setNodes, setEdges, fitView]);
+
+  const redo = useCallback(() => {
+    const snap = redoStack.current.pop();
+    if (!snap) return;
+    undoStack.current = [...undoStack.current, { ...stateRef.current }];
+    setNodes(doRehydrate(snap.nodes));
+    setEdges(snap.edges);
+    setTimeout(() => fitView({ duration: 400, padding: 0.18 }), 50);
+  }, [doRehydrate, setNodes, setEdges, fitView]);
+
+  // ── PNG export ───────────────────────────────────────────────
+  const handleExport = useCallback(async () => {
+    const el = document.querySelector('.react-flow') as HTMLElement;
+    if (!el) return;
+    setExporting(true);
+    await new Promise(r => setTimeout(r, 300));
+    try {
+      const url = await toPng(el, { backgroundColor: '#07070f', pixelRatio: 2 });
+      setExporting(false);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pinching-${rootIdeaRef.current.slice(0, 20)}.png`;
+      a.click();
+    } catch { setExporting(false); }
+  }, []);
+
+  // ── session history (localStorage) ───────────────────────────
+  const loadSessionHistory = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      setSessionHistory(list);
+    } catch { setSessionHistory([]); }
+  }, [HISTORY_KEY]);
+
+  const registerSession = useCallback(() => {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY);
+      const list: { idea: string; savedAt: number; storageKey: string }[] = raw ? JSON.parse(raw) : [];
+      const filtered = list.filter(s => s.storageKey !== STORAGE_KEY);
+      const updated = [{ idea: rootIdeaRef.current, savedAt: Date.now(), storageKey: STORAGE_KEY }, ...filtered].slice(0, 30);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(updated));
+    } catch { /* ignore */ }
+  }, [STORAGE_KEY, HISTORY_KEY]);
+
   // ── init ─────────────────────────────────────────────────────
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
 
+    if (initialData) {
+      setNodes(doRehydrate(initialData.nodes));
+      setEdges(initialData.edges);
+      setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
+      registerSession();
+      return;
+    }
+
     const rootNode: Node = {
       id: 'root',
       type: 'pinch',
       position: { x: 0, y: 0 },
-      data: { label: initialIdea, variant: 'root' as const, onPinch: handlePinch },
+      data: { label: initialIdea, variant: 'root' as const, onPinch: handlePinch, onEdit: handleEdit },
     };
     setNodes([rootNode]);
-    setTimeout(() => handlePinch('root', initialIdea), 200);
+    setInitializing(true);
+    handlePinch('root', initialIdea).finally(() => setInitializing(false));
+    registerSession();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── stateRef sync ────────────────────────────────────────────
+  useEffect(() => { stateRef.current = { nodes, edges }; }, [nodes, edges]);
+
+  // ── keyboard shortcuts ────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); redo(); }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  // ── load session history on mount ────────────────────────────
+  useEffect(() => { loadSessionHistory(); }, [loadSessionHistory]);
 
   // ── render ────────────────────────────────────────────────────
   return (
@@ -509,13 +678,17 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
       </ReactFlow>
 
       {/* ── TOP BAR ─────────────────────────────────────────── */}
-      <div style={{ position: 'absolute', top: 24, left: 24, right: 24, zIndex: 50, display: 'flex', alignItems: 'center', gap: '12px' }}>
-        {/* Back button */}
-        <button onClick={onReset} style={btnStyle('back')}>
+      <div style={{
+        position: 'absolute', top: 16, left: 16, right: 16, zIndex: 50,
+        display: 'flex', alignItems: 'center', gap: '8px',
+        overflowX: 'auto', scrollbarWidth: 'none',
+      }}>
+        {/* Back */}
+        <button onClick={onReset} style={{ ...btnStyle('back'), flexShrink: 0 }}>
           ← 나가기
         </button>
 
-        {/* Save / Load buttons */}
+        {/* Save */}
         <button
           onClick={async () => {
             const strip = (ns: Node[]) => ns.map(n => ({
@@ -530,17 +703,10 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
               },
             }));
             const strippedNodes = strip(getNodes());
-            // localStorage 백업
             localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes: strippedNodes, edges }));
-
-            const json = JSON.stringify({
-              nodes: strippedNodes,
-              edges,
-              idea: rootIdeaRef.current,
-              savedAt: Date.now(),
-            }, null, 2);
+            registerSession();
+            const json = JSON.stringify({ nodes: strippedNodes, edges, idea: rootIdeaRef.current, savedAt: Date.now() }, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
-
             if ('showSaveFilePicker' in window) {
               try {
                 const handle = await (window as any).showSaveFilePicker({
@@ -548,42 +714,24 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
                   types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
                 });
                 const writable = await handle.createWritable();
-                await writable.write(blob);
-                await writable.close();
-                setSaveMsg('✓ 저장됨');
-                setTimeout(() => setSaveMsg(null), 2200);
-                return;
-              } catch (e: any) {
-                if (e.name === 'AbortError') { setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return; }
-              }
+                await writable.write(blob); await writable.close();
+                setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return;
+              } catch (e: any) { if (e.name === 'AbortError') { setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return; } }
             }
-            // 폴백: 자동 다운로드
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url; a.download = `pinching-${rootIdeaRef.current.slice(0, 20)}.json`; a.click();
             URL.revokeObjectURL(url);
-            setSaveMsg('✓ 저장됨');
-            setTimeout(() => setSaveMsg(null), 2200);
+            setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200);
           }}
-          style={btnStyle('save')}
+          style={{ ...btnStyle('save'), flexShrink: 0 }}
         >
           {saveMsg ?? '💾 저장'}
         </button>
-        {/* 파일에서 불러오기 */}
+
+        {/* Load from file */}
         <button
           onClick={async () => {
-            const rehydrate = (ns: Node[]) => ns.map(n => {
-              const v = (n.data as unknown as PinchNodeData).variant;
-              return {
-                ...n,
-                data: {
-                  ...n.data,
-                  onPinch: (v === 'question' || v === 'result') ? handlePinch : undefined,
-                  onExecuteResearch: v === 'suggestion' ? handleExecuteResearch : undefined,
-                },
-              };
-            });
-
             if ('showOpenFilePicker' in window) {
               try {
                 const [handle] = await (window as any).showOpenFilePicker({
@@ -591,50 +739,133 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
                 });
                 const file = await handle.getFile();
                 const parsed = JSON.parse(await file.text());
-                setNodes(rehydrate(parsed.nodes));
+                if (parsed.root !== undefined && parsed.idea === undefined) {
+                  alert('이 파일은 Spatial Research 형식입니다.'); return;
+                }
+                setNodes(doRehydrate(parsed.nodes));
                 setEdges(parsed.edges ?? []);
                 setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
-                setSaveMsg('✓ 불러옴');
-                setTimeout(() => setSaveMsg(null), 2000);
-                return;
+                setSaveMsg('✓ 불러옴'); setTimeout(() => setSaveMsg(null), 2000); return;
               } catch (e: any) { if (e.name === 'AbortError') return; }
             }
-            // 폴백: input[file]
             const input = document.createElement('input');
             input.type = 'file'; input.accept = '.json';
             input.onchange = async () => {
               const file = input.files?.[0]; if (!file) return;
               try {
                 const parsed = JSON.parse(await file.text());
-                setNodes(rehydrate(parsed.nodes));
+                if (parsed.root !== undefined && parsed.idea === undefined) { alert('이 파일은 Spatial Research 형식입니다.'); return; }
+                setNodes(doRehydrate(parsed.nodes));
                 setEdges(parsed.edges ?? []);
                 setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
-                setSaveMsg('✓ 불러옴');
-                setTimeout(() => setSaveMsg(null), 2000);
+                setSaveMsg('✓ 불러옴'); setTimeout(() => setSaveMsg(null), 2000);
               } catch { setSaveMsg('불러오기 오류'); setTimeout(() => setSaveMsg(null), 2000); }
             };
             input.click();
           }}
-          style={btnStyle('save')}
+          style={{ ...btnStyle('save'), flexShrink: 0 }}
         >
-          📂 불러오기
+          📂 열기
         </button>
 
-        <div style={{ flex: 1 }} />
+        {/* History */}
+        <button
+          onClick={() => { loadSessionHistory(); setShowHistory(v => !v); }}
+          style={{ ...btnStyle('save'), flexShrink: 0 }}
+        >
+          🕐 히스토리
+        </button>
+
+        {/* Export PNG */}
+        <button
+          onClick={handleExport}
+          disabled={exporting}
+          style={{ ...btnStyle('save'), flexShrink: 0, opacity: exporting ? 0.5 : 1 }}
+        >
+          {exporting ? '내보내는 중...' : '🖼️ 내보내기'}
+        </button>
+
+        {/* Undo / Redo */}
+        <button onClick={undo} title="실행취소 (Ctrl+Z)" style={{ ...btnStyle('save'), flexShrink: 0, fontSize: '14px' }}>↩</button>
+        <button onClick={redo} title="다시실행 (Ctrl+Y)" style={{ ...btnStyle('save'), flexShrink: 0, fontSize: '14px' }}>↪</button>
+
+        <div style={{ flex: 1, minWidth: 8 }} />
 
         {/* Analysis buttons */}
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
           {([
-            { mode: 'swot' as AnalysisMode,        label: '⚖️ SWOT 분석' },
-            { mode: 'feasibility' as AnalysisMode, label: '🛠️ 실행 가능성' },
-            { mode: 'competition' as AnalysisMode, label: '🏁 경쟁 분석' },
+            { mode: 'swot' as AnalysisMode,        label: '⚖️ SWOT' },
+            { mode: 'feasibility' as AnalysisMode, label: '🛠️ 실행가능' },
+            { mode: 'competition' as AnalysisMode, label: '🏁 경쟁' },
           ] as const).map(({ mode, label }) => (
-            <button key={mode} onClick={() => handleAnalysis(mode)} disabled={globalLoading} style={btnStyle('analysis')}>
+            <button
+              key={mode}
+              onClick={() => { saveSnapshot(); handleAnalysis(mode); }}
+              disabled={globalLoading || initializing || nodes.length <= 1}
+              style={{ ...btnStyle('analysis'), flexShrink: 0, opacity: (globalLoading || initializing || nodes.length <= 1) ? 0.35 : 1 }}
+            >
               {label}
             </button>
           ))}
         </div>
       </div>
+
+      {/* ── HISTORY PANEL ───────────────────────────────────────── */}
+      {showHistory && (
+        <div style={{
+          position: 'absolute', top: 64, left: 16, zIndex: 60,
+          background: 'rgba(5,5,18,0.92)', backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px',
+          padding: '12px', minWidth: '260px', maxWidth: '340px',
+          maxHeight: '60vh', overflowY: 'auto',
+        }}>
+          <div style={{ fontSize: '10px', letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', marginBottom: '10px' }}>
+            최근 세션
+          </div>
+          {sessionHistory.length === 0 ? (
+            <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.25)', padding: '8px 0' }}>저장된 세션 없음</div>
+          ) : sessionHistory.map(s => {
+            const stored = localStorage.getItem(s.storageKey);
+            const canLoad = !!stored;
+            return (
+              <div
+                key={s.storageKey}
+                onClick={() => {
+                  if (!canLoad) return;
+                  try {
+                    const parsed = JSON.parse(stored!);
+                    setNodes(doRehydrate(parsed.nodes));
+                    setEdges(parsed.edges ?? []);
+                    setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
+                    setShowHistory(false);
+                  } catch { /* ignore */ }
+                }}
+                style={{
+                  padding: '8px 10px', borderRadius: '8px', marginBottom: '4px',
+                  background: canLoad ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  cursor: canLoad ? 'pointer' : 'default',
+                  opacity: canLoad ? 1 : 0.4,
+                }}
+              >
+                <div style={{ fontSize: '12px', color: 'rgba(255,255,255,0.8)', marginBottom: '3px', wordBreak: 'keep-all' }}>
+                  {s.idea.slice(0, 40)}{s.idea.length > 40 ? '...' : ''}
+                </div>
+                <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)' }}>
+                  {new Date(s.savedAt).toLocaleDateString('ko-KR')} {new Date(s.savedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                  {!canLoad && ' · 데이터 없음'}
+                </div>
+              </div>
+            );
+          })}
+          <button
+            onClick={() => setShowHistory(false)}
+            style={{ ...btnStyle('back'), marginTop: '8px', width: '100%', textAlign: 'center' }}
+          >
+            닫기
+          </button>
+        </div>
+      )}
 
       {/* ── BOTTOM CHAT INPUT ────────────────────────────────── */}
       <div style={{
@@ -741,29 +972,40 @@ function CorePointPinchingContent({ initialIdea, onReset }: { initialIdea: strin
           </button>
         </div>
 
-        {/* Legend */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginTop: '8px' }}>
-          {[
-            { color: 'rgba(255,255,255,0.5)', label: '핵심 질문' },
-            { color: 'rgba(14,165,233,0.7)', label: '조사 제안 (클릭 실행)' },
-            { color: 'rgba(251,191,36,0.7)', label: '조사 결과' },
-            { color: 'rgba(167,139,250,0.7)', label: '분석' },
-          ].map(({ color, label }) => (
-            <span key={label} style={{ fontSize: '9px', color: 'rgba(255,255,255,0.3)', display: 'flex', alignItems: 'center', gap: '4px', letterSpacing: '0.08em' }}>
-              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '2px', background: color }} />
-              {label}
-            </span>
-          ))}
-        </div>
       </div>
 
-      {/* Global loading overlay */}
+      {/* Initial generating overlay */}
       <AnimatePresence>
-        {(globalLoading || chatLoading) && (
+        {initializing && (
           <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             style={{
-              position: 'absolute', top: 76, right: 24, zIndex: 60,
+              position: 'absolute', inset: 0, zIndex: 55,
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              background: 'rgba(7,7,15,0.75)', backdropFilter: 'blur(6px)',
+              gap: '16px', pointerEvents: 'none',
+            }}
+          >
+            <div style={{
+              width: 48, height: 48, borderRadius: '50%',
+              border: '2px solid rgba(255,255,255,0.08)',
+              borderTop: '2px solid rgba(255,255,255,0.6)',
+              animation: 'spin 1s linear infinite',
+            }} />
+            <p style={{ fontSize: '12px', color: 'rgba(255,255,255,0.4)', letterSpacing: '0.3em', textTransform: 'uppercase' }}>
+              아이디어 분석 중...
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global loading overlay (non-initial) */}
+      <AnimatePresence>
+        {(globalLoading || chatLoading) && !initializing && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{
+              position: 'absolute', top: 72, right: 24, zIndex: 60,
               background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(10px)',
               border: '1px solid rgba(255,255,255,0.08)', borderRadius: '10px',
               padding: '8px 16px', fontSize: '11px', color: 'rgba(255,255,255,0.5)',
@@ -822,10 +1064,10 @@ function btnStyle(type: 'back' | 'analysis' | 'save'): React.CSSProperties {
 }
 
 // ── Export ────────────────────────────────────────────────────────
-export default function CorePointPinching({ initialIdea, onReset }: { initialIdea: string; onReset: () => void }) {
+export default function CorePointPinching({ initialIdea, onReset, initialData }: { initialIdea: string; onReset: () => void; initialData?: { nodes: Node[]; edges: Edge[] } }) {
   return (
     <ReactFlowProvider>
-      <CorePointPinchingContent initialIdea={initialIdea} onReset={onReset} />
+      <CorePointPinchingContent initialIdea={initialIdea} onReset={onReset} initialData={initialData} />
     </ReactFlowProvider>
   );
 }

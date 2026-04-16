@@ -41,7 +41,7 @@ export const metadata: Metadata = {
     description: "AI 기반 창의 리서치 엔진 — 아이디어의 실을 잇다",
     images: [
       {
-        url: "/filum-og.png",
+        url: "/filum-og.jpg",
         width: 1200,
         height: 630,
         alt: "Filum — Creative Research Engine",
@@ -52,7 +52,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Filum",
     description: "AI 기반 창의 리서치 엔진 — 아이디어의 실을 잇다",
-    images: ["/filum-og.png"],
+    images: ["/filum-og.jpg"],
   },
 };
 

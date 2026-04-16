@@ -682,139 +682,123 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
       <div style={{
         position: 'absolute', top: 16, left: 16, right: 16, zIndex: 50,
         display: 'flex', alignItems: 'center', gap: '8px',
-        overflowX: 'auto', scrollbarWidth: 'none',
       }}>
         {/* Back */}
         <button onClick={onReset} style={{ ...btnStyle('back'), flexShrink: 0 }}>
-          ← 나가기
+          나가기
         </button>
 
-        {/* Save */}
-        <button
-          onClick={async () => {
-            const strip = (ns: Node[]) => ns.map(n => ({
-              ...n,
-              data: {
-                label: (n.data as unknown as PinchNodeData).label,
-                variant: (n.data as unknown as PinchNodeData).variant,
-                summary: (n.data as unknown as PinchNodeData).summary,
-                keyPoints: (n.data as unknown as PinchNodeData).keyPoints,
-                sections: (n.data as unknown as PinchNodeData).sections,
-                analysisTitle: (n.data as unknown as PinchNodeData).analysisTitle,
-              },
-            }));
-            const strippedNodes = strip(getNodes());
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes: strippedNodes, edges }));
-            registerSession();
-            const json = JSON.stringify({ nodes: strippedNodes, edges, idea: rootIdeaRef.current, savedAt: Date.now() }, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            if ('showSaveFilePicker' in window) {
-              try {
-                const handle = await (window as any).showSaveFilePicker({
-                  suggestedName: `pinching-${rootIdeaRef.current.slice(0, 20)}.json`,
-                  types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
-                });
-                const writable = await handle.createWritable();
-                await writable.write(blob); await writable.close();
-                setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return;
-              } catch (e: any) { if (e.name === 'AbortError') { setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return; } }
-            }
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url; a.download = `pinching-${rootIdeaRef.current.slice(0, 20)}.json`; a.click();
-            URL.revokeObjectURL(url);
-            setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200);
-          }}
-          style={{ ...btnStyle('save'), flexShrink: 0 }}
-        >
-          {saveMsg ?? '💾 저장'}
-        </button>
+        <div style={{ flex: 1 }} />
 
-        {/* Load from file */}
-        <button
-          onClick={async () => {
-            if ('showOpenFilePicker' in window) {
-              try {
-                const [handle] = await (window as any).showOpenFilePicker({
-                  types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
-                });
-                const file = await handle.getFile();
-                const parsed = JSON.parse(await file.text());
-                if (parsed.root !== undefined && parsed.idea === undefined) {
-                  alert('이 파일은 Spatial Research 형식입니다.'); return;
-                }
-                setNodes(doRehydrate(parsed.nodes));
-                setEdges(parsed.edges ?? []);
-                setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
-                setSaveMsg('✓ 불러옴'); setTimeout(() => setSaveMsg(null), 2000); return;
-              } catch (e: any) { if (e.name === 'AbortError') return; }
-            }
-            const input = document.createElement('input');
-            input.type = 'file'; input.accept = '.json';
-            input.onchange = async () => {
-              const file = input.files?.[0]; if (!file) return;
-              try {
-                const parsed = JSON.parse(await file.text());
-                if (parsed.root !== undefined && parsed.idea === undefined) { alert('이 파일은 Spatial Research 형식입니다.'); return; }
-                setNodes(doRehydrate(parsed.nodes));
-                setEdges(parsed.edges ?? []);
-                setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
-                setSaveMsg('✓ 불러옴'); setTimeout(() => setSaveMsg(null), 2000);
-              } catch { setSaveMsg('불러오기 오류'); setTimeout(() => setSaveMsg(null), 2000); }
-            };
-            input.click();
-          }}
-          style={{ ...btnStyle('save'), flexShrink: 0 }}
-        >
-          📂 열기
-        </button>
+        {/* Right-side buttons */}
+        <div style={{ display: 'flex', gap: '6px', flexShrink: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {/* Save */}
+          <button
+            onClick={async () => {
+              const strip = (ns: Node[]) => ns.map(n => ({
+                ...n,
+                data: {
+                  label: (n.data as unknown as PinchNodeData).label,
+                  variant: (n.data as unknown as PinchNodeData).variant,
+                  summary: (n.data as unknown as PinchNodeData).summary,
+                  keyPoints: (n.data as unknown as PinchNodeData).keyPoints,
+                  sections: (n.data as unknown as PinchNodeData).sections,
+                  analysisTitle: (n.data as unknown as PinchNodeData).analysisTitle,
+                },
+              }));
+              const strippedNodes = strip(getNodes());
+              localStorage.setItem(STORAGE_KEY, JSON.stringify({ nodes: strippedNodes, edges }));
+              registerSession();
+              const json = JSON.stringify({ nodes: strippedNodes, edges, idea: rootIdeaRef.current, savedAt: Date.now() }, null, 2);
+              const blob = new Blob([json], { type: 'application/json' });
+              if ('showSaveFilePicker' in window) {
+                try {
+                  const handle = await (window as any).showSaveFilePicker({
+                    suggestedName: `pinching-${rootIdeaRef.current.slice(0, 20)}.json`,
+                    types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
+                  });
+                  const writable = await handle.createWritable();
+                  await writable.write(blob); await writable.close();
+                  setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return;
+                } catch (e: any) { if (e.name === 'AbortError') { setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200); return; } }
+              }
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url; a.download = `pinching-${rootIdeaRef.current.slice(0, 20)}.json`; a.click();
+              URL.revokeObjectURL(url);
+              setSaveMsg('✓ 저장됨'); setTimeout(() => setSaveMsg(null), 2200);
+            }}
+            style={{ ...btnStyle('save'), flexShrink: 0 }}
+          >
+            {saveMsg ?? '저장'}
+          </button>
 
-        {/* History */}
-        <button
-          onClick={() => { loadSessionHistory(); setShowHistory(v => !v); }}
-          style={{ ...btnStyle('save'), flexShrink: 0 }}
-        >
-          🕐 히스토리
-        </button>
+          {/* Load from file */}
+          <button
+            onClick={async () => {
+              if ('showOpenFilePicker' in window) {
+                try {
+                  const [handle] = await (window as any).showOpenFilePicker({
+                    types: [{ description: 'Pinching JSON', accept: { 'application/json': ['.json'] } }],
+                  });
+                  const file = await handle.getFile();
+                  const parsed = JSON.parse(await file.text());
+                  if (parsed.root !== undefined && parsed.idea === undefined) {
+                    alert('이 파일은 Spatial Research 형식입니다.'); return;
+                  }
+                  setNodes(doRehydrate(parsed.nodes));
+                  setEdges(parsed.edges ?? []);
+                  setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
+                  setSaveMsg('✓ 불러옴'); setTimeout(() => setSaveMsg(null), 2000); return;
+                } catch (e: any) { if (e.name === 'AbortError') return; }
+              }
+              const input = document.createElement('input');
+              input.type = 'file'; input.accept = '.json';
+              input.onchange = async () => {
+                const file = input.files?.[0]; if (!file) return;
+                try {
+                  const parsed = JSON.parse(await file.text());
+                  if (parsed.root !== undefined && parsed.idea === undefined) { alert('이 파일은 Spatial Research 형식입니다.'); return; }
+                  setNodes(doRehydrate(parsed.nodes));
+                  setEdges(parsed.edges ?? []);
+                  setTimeout(() => fitView({ duration: 800, padding: 0.18 }), 100);
+                  setSaveMsg('✓ 불러옴'); setTimeout(() => setSaveMsg(null), 2000);
+                } catch { setSaveMsg('불러오기 오류'); setTimeout(() => setSaveMsg(null), 2000); }
+              };
+              input.click();
+            }}
+            style={{ ...btnStyle('save'), flexShrink: 0 }}
+          >
+            열기
+          </button>
 
-        {/* Export PNG */}
-        <button
-          onClick={handleExport}
-          disabled={exporting}
-          style={{ ...btnStyle('save'), flexShrink: 0, opacity: exporting ? 0.5 : 1 }}
-        >
-          {exporting ? '내보내는 중...' : '🖼️ 내보내기'}
-        </button>
+          {/* History */}
+          <button
+            onClick={() => { loadSessionHistory(); setShowHistory(v => !v); }}
+            style={{ ...btnStyle('save'), flexShrink: 0 }}
+          >
+            히스토리
+          </button>
 
-        {/* Undo / Redo */}
-        <button onClick={undo} title="실행취소 (Ctrl+Z)" style={{ ...btnStyle('save'), flexShrink: 0, fontSize: '14px' }}>↩</button>
-        <button onClick={redo} title="다시실행 (Ctrl+Y)" style={{ ...btnStyle('save'), flexShrink: 0, fontSize: '14px' }}>↪</button>
+          {/* Export PNG */}
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            style={{ ...btnStyle('save'), flexShrink: 0, opacity: exporting ? 0.5 : 1 }}
+          >
+            {exporting ? '내보내는 중...' : '내보내기'}
+          </button>
 
-        <div style={{ flex: 1, minWidth: 8 }} />
-
-        {/* Analysis buttons */}
-        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-          {([
-            { mode: 'swot' as AnalysisMode,        label: '⚖️ SWOT' },
-            { mode: 'feasibility' as AnalysisMode, label: '🛠️ 실행가능' },
-            { mode: 'competition' as AnalysisMode, label: '🏁 경쟁' },
-          ] as const).map(({ mode, label }) => (
-            <button
-              key={mode}
-              onClick={() => { saveSnapshot(); handleAnalysis(mode); }}
-              disabled={globalLoading || initializing || nodes.length <= 1}
-              style={{ ...btnStyle('analysis'), flexShrink: 0, opacity: (globalLoading || initializing || nodes.length <= 1) ? 0.35 : 1 }}
-            >
-              {label}
-            </button>
-          ))}
+          {/* Undo / Redo */}
+          <button onClick={undo} title="실행취소 (Ctrl+Z)" style={{ ...btnStyle('save'), flexShrink: 0 }}>뒤로</button>
+          <button onClick={redo} title="다시실행 (Ctrl+Y)" style={{ ...btnStyle('save'), flexShrink: 0 }}>앞으로</button>
         </div>
       </div>
 
       {/* ── HISTORY PANEL ───────────────────────────────────────── */}
       {showHistory && (
         <div style={{
-          position: 'absolute', top: 64, left: 16, zIndex: 60,
+          position: 'absolute', top: 64, right: 16, zIndex: 60,
           background: 'rgba(5,5,18,0.92)', backdropFilter: 'blur(20px)',
           border: '1px solid rgba(255,255,255,0.1)', borderRadius: '14px',
           padding: '12px', minWidth: '260px', maxWidth: '340px',
@@ -871,7 +855,7 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
       {/* ── BOTTOM CHAT INPUT ────────────────────────────────── */}
       <div style={{
         position: 'absolute', bottom: 28, left: '50%', transform: 'translateX(-50%)',
-        zIndex: 50, width: 'min(640px, 90vw)',
+        zIndex: 50, width: 'min(860px, 94vw)',
       }}>
         {/* Chat History */}
         {chatHistory.length > 0 && (
@@ -900,7 +884,9 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
                   padding: '6px 12px',
                   maxWidth: '85%',
                 }}>
-                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.75)' }}>{h.text}</span>
+                  <span style={{ fontSize: '11px', color: 'rgba(255,255,255,0.75)' }}>
+                    {h.text.length > 50 ? h.text.slice(0, 50) + '...' : h.text}
+                  </span>
                   <span style={{ fontSize: '10px', flexShrink: 0 }}>
                     {h.status === 'pending' ? '⟳' : h.status === 'done' ? '✓' : '✕'}
                   </span>
@@ -910,67 +896,89 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
           </div>
         )}
 
-        {/* Input Bar */}
-        <div style={{
-          background: 'rgba(5,5,15,0.75)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: '20px',
-          display: 'flex',
-          alignItems: 'flex-end',
-          padding: '6px 6px 6px 20px',
-          gap: '8px',
-          boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
-        }}>
-          <span style={{ fontSize: '14px', opacity: 0.5, paddingBottom: '10px' }}>✦</span>
-          <textarea
-            rows={1}
-            value={chatInput}
-            onChange={e => {
-              setChatInput(e.target.value);
-              e.target.style.height = 'auto';
-              e.target.style.height = e.target.scrollHeight + 'px';
-            }}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey && !chatLoading) {
-                e.preventDefault();
-                handleChatSubmit();
-              }
-            }}
-            placeholder={globalLoading || chatLoading ? '처리 중...' : '조사해줘, 분석해줘, 아이디어 줘, 이미지로 표현해줘 등 자유롭게 입력하세요'}
-            disabled={chatLoading || globalLoading}
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              color: 'rgba(255,255,255,0.8)',
-              fontSize: '13px',
-              padding: '10px 0',
-              resize: 'none',
-              overflow: 'hidden',
-              lineHeight: 1.55,
-              minHeight: '40px',
-            }}
-          />
-          <button
-            onClick={handleChatSubmit}
-            disabled={!chatInput.trim() || chatLoading || globalLoading}
-            style={{
-              padding: '8px 18px',
-              background: chatInput.trim() && !chatLoading ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.1)',
-              border: 'none',
-              borderRadius: '999px',
-              color: chatInput.trim() && !chatLoading ? '#000' : 'rgba(255,255,255,0.3)',
-              fontSize: '12px',
-              fontWeight: 600,
-              cursor: chatInput.trim() && !chatLoading ? 'pointer' : 'default',
-              transition: 'all 0.2s',
-              flexShrink: 0,
-            }}
-          >
-            {chatLoading ? '⟳' : '실행'}
-          </button>
+        {/* Input Bar + Analysis Buttons */}
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end' }}>
+          {/* Analysis buttons */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', flexShrink: 0 }}>
+            {([
+              { mode: 'swot' as AnalysisMode,        label: 'SWOT' },
+              { mode: 'feasibility' as AnalysisMode, label: '실행가능' },
+              { mode: 'competition' as AnalysisMode, label: '경쟁' },
+            ] as const).map(({ mode, label }) => (
+              <button
+                key={mode}
+                onClick={() => { saveSnapshot(); handleAnalysis(mode); }}
+                disabled={globalLoading || initializing || nodes.length <= 1}
+                style={{ ...btnStyle('analysis'), flexShrink: 0, opacity: (globalLoading || initializing || nodes.length <= 1) ? 0.35 : 1 }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Input Bar */}
+          <div style={{
+            flex: 1,
+            background: 'rgba(5,5,15,0.75)',
+            backdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: '20px',
+            display: 'flex',
+            alignItems: 'flex-end',
+            padding: '6px 6px 6px 20px',
+            gap: '8px',
+            boxShadow: '0 8px 40px rgba(0,0,0,0.6)',
+          }}>
+            <span style={{ fontSize: '14px', opacity: 0.5, paddingBottom: '10px' }}>✦</span>
+            <textarea
+              rows={1}
+              value={chatInput}
+              onChange={e => {
+                setChatInput(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = e.target.scrollHeight + 'px';
+              }}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey && !chatLoading) {
+                  e.preventDefault();
+                  handleChatSubmit();
+                }
+              }}
+              placeholder={globalLoading || chatLoading ? '처리 중...' : '조사해줘, 분석해줘, 아이디어 줘, 이미지로 표현해줘 등 자유롭게 입력하세요'}
+              disabled={chatLoading || globalLoading}
+              style={{
+                flex: 1,
+                background: 'transparent',
+                border: 'none',
+                outline: 'none',
+                color: 'rgba(255,255,255,0.8)',
+                fontSize: '13px',
+                padding: '10px 0',
+                resize: 'none',
+                overflow: 'hidden',
+                lineHeight: 1.55,
+                minHeight: '40px',
+              }}
+            />
+            <button
+              onClick={handleChatSubmit}
+              disabled={!chatInput.trim() || chatLoading || globalLoading}
+              style={{
+                padding: '8px 18px',
+                background: chatInput.trim() && !chatLoading ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.1)',
+                border: 'none',
+                borderRadius: '999px',
+                color: chatInput.trim() && !chatLoading ? '#000' : 'rgba(255,255,255,0.3)',
+                fontSize: '12px',
+                fontWeight: 600,
+                cursor: chatInput.trim() && !chatLoading ? 'pointer' : 'default',
+                transition: 'all 0.2s',
+                flexShrink: 0,
+              }}
+            >
+              {chatLoading ? '⟳' : '실행'}
+            </button>
+          </div>
         </div>
 
       </div>

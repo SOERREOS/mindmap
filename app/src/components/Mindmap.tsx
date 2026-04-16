@@ -516,12 +516,24 @@ const MindmapContent = forwardRef<MindmapHandle, {
       const parentDepth = (node.data.depth as number) ?? 0.5;
       const color = GROUP_COLORS[groupIdx % GROUP_COLORS.length];
 
-      const rawNew: Node[] = subs.map((sub, i) => ({
-        id: `exp-${node.id}-${Date.now()}-${i}`, type: 'sub',
-        data: { ...sub, depth: parentDepth * 0.6, groupIdx, floatClass: SUB_FLOATS[(groupIdx * 5 + i) % SUB_FLOATS.length] },
-        position: { x: node.position.x + Math.cos(i) * 300, y: node.position.y + Math.sin(i) * 300 },
-        zIndex: 60,
-      }));
+      // 루트(0,0)에서 부모 노드 방향의 바깥쪽으로 펼치기
+      const outDx = node.position.x;
+      const outDy = node.position.y;
+      const outDist = Math.sqrt(outDx * outDx + outDy * outDy) || 1;
+      const outAngle = Math.atan2(outDy / outDist, outDx / outDist);
+      const count = subs.length;
+      const fanSpread = Math.min(Math.PI * 0.65, (Math.PI * 0.4) + count * 0.08);
+
+      const rawNew: Node[] = subs.map((sub, i) => {
+        const angle = outAngle + (i - (count - 1) / 2) * (fanSpread / Math.max(count - 1, 1));
+        const radius = 290 + (i % 2) * 60;
+        return {
+          id: `exp-${node.id}-${Date.now()}-${i}`, type: 'sub',
+          data: { ...sub, depth: parentDepth * 0.6, groupIdx, floatClass: SUB_FLOATS[(groupIdx * 5 + i) % SUB_FLOATS.length] },
+          position: { x: node.position.x + Math.cos(angle) * radius, y: node.position.y + Math.sin(angle) * radius },
+          zIndex: 60,
+        };
+      });
 
       setNodes(prev => {
         const spread = spreadNodes(rawNew, prev, 220);
@@ -610,7 +622,9 @@ const MindmapContent = forwardRef<MindmapHandle, {
                   {cmdHistory.filter(h => h.nodeId === selectedId).slice(-3).map((h, i) => (
                     <div key={i} className="inline-flex items-center gap-2 bg-white/[0.07] backdrop-blur-md border border-white/8 rounded-2xl px-4 py-1.5 max-w-[90%]">
                       <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.3)', letterSpacing: '0.15em' }}>입력</span>
-                      <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)' }}>{h.query}</span>
+                      <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.65)' }}>
+                        {h.query.length > 40 ? h.query.slice(0, 40) + '...' : h.query}
+                      </span>
                     </div>
                   ))}
                 </div>

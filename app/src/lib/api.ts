@@ -3,27 +3,47 @@ const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
 // ── 선호 모델 순위 (최신·빠른 순) ─────────────────────────────
 // 실제 사용 가능 여부는 아래 getModels()가 API에서 자동 확인함
 const PREFERRED = [
-  'gemini-1.5-flash',     // 초안정성 1순위 (부하 적음)
-  'gemini-1.5-pro',       // 안정성 2순위
-  'gemini-3.1-flash-lite',// 최신 성능 백업
-  'gemini-3.1-pro',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
+  'gemini-2.0-flash',          // 1순위: 안정적인 최신 flash
+  'gemini-2.0-flash-lite',     // 2순위: 가볍고 빠름
+  'gemini-2.5-flash',          // 3순위
+  'gemini-2.5-flash-preview-04-17', // preview 변형
+  'gemini-2.5-pro',            // 4순위
+  'gemini-2.5-pro-preview-03-25',   // preview 변형
+  'gemini-1.5-flash',          // 최후 폴백 (deprecated될 수 있음)
+  'gemini-1.5-pro',
 ];
 
 // ── 사용 가능한 모델 자동 조회 + 캐시 ────────────────────────
 let _cachedModels: string[] | null = null;
-let _blacklistedModels = new Set<string>(); // 이번 세션에서 부속/부하 발생한 모델들
+let _blacklistedModels = new Set<string>(); // 이번 세션에서 부하/오류 발생한 모델들
+
+// API 키 없이도 항상 시도할 기본 모델 목록 (discovery 실패 시 사용)
+const FALLBACK_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+];
 
 async function getModels(): Promise<string[]> {
-  if (_cachedModels && _cachedModels.length > 0) return _cachedModels;
+  // 캐시가 있고 비어있지 않으면 반환 (단, 전부 블랙리스트면 재조회)
+  if (_cachedModels && _cachedModels.length > 0) {
+    const active = _cachedModels.filter(m => !_blacklistedModels.has(m));
+    if (active.length > 0) return active;
+    // 모두 블랙리스트됐으면 캐시 초기화 후 재조회
+    _cachedModels = null;
+    _blacklistedModels.clear();
+  }
 
-  const versions = ['v1', 'v1beta'];
+  const versions = ['v1beta', 'v1'];
   let availableSet = new Set<string>();
 
   for (const ver of versions) {
     try {
-      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/${ver}/models?key=${API_KEY}&pageSize=50`, {});
+      const res = await fetchWithTimeout(
+        `https://generativelanguage.googleapis.com/${ver}/models?key=${API_KEY}&pageSize=100`,
+        {}
+      );
       const data = await res.json();
       if (data.models) {
         data.models.forEach((m: any) => {
@@ -33,20 +53,23 @@ async function getModels(): Promise<string[]> {
           }
         });
       }
+      if (availableSet.size > 0) break; // 성공하면 v1beta로 충분
     } catch (e) { console.warn(`Discovery failed for ${ver}`, e); }
   }
 
-  // 선호 모델 중 실제로 목록에 있는 것들만 순서대로 추출
-  const final = PREFERRED.filter(m => availableSet.has(m));
-  
-  // 리스트에 없더라도 1.5-flash 같은 기본 모델은 무조건 백업으로 포함
-  if (!availableSet.has('gemini-1.5-flash')) availableSet.add('gemini-1.5-flash');
-  
-  // 가용한 전체 모델 중 블랙리스트 제외하고 블랙리스트 아닌 것들 추림
-  const extra = Array.from(availableSet).filter(m => !PREFERRED.includes(m) && !_blacklistedModels.has(m));
-  
-  _cachedModels = [...final, ...extra].filter(m => !_blacklistedModels.has(m));
-  if (_cachedModels.length === 0) _cachedModels = ['gemini-1.5-flash'];
+  // discovery가 성공했으면 PREFERRED 순서로 정렬, 나머지 추가
+  let ordered: string[];
+  if (availableSet.size > 0) {
+    const preferred = PREFERRED.filter(m => availableSet.has(m));
+    const extra = Array.from(availableSet).filter(m => !PREFERRED.includes(m));
+    ordered = [...preferred, ...extra];
+  } else {
+    // discovery 실패 시 FALLBACK_MODELS 전체 시도
+    ordered = [...FALLBACK_MODELS];
+  }
+
+  _cachedModels = ordered.filter(m => !_blacklistedModels.has(m));
+  if (_cachedModels.length === 0) _cachedModels = [...FALLBACK_MODELS];
 
   return _cachedModels;
 }
@@ -125,6 +148,13 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
 
   let models = await getModels();
 
+  // 모델 목록이 비어있으면 블랙리스트 초기화 후 재조회
+  if (models.length === 0) {
+    _blacklistedModels.clear();
+    _cachedModels = null;
+    models = await getModels();
+  }
+
   // 딥모드일 경우 Pro 모델을 최우선순위로 배치
   if (deep) {
     const proModels = models.filter(m => m.includes('pro'));
@@ -137,7 +167,7 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
   for (const model of models) {
     if (onStatus) onStatus(`연결 시도 중: ${model}...`);
 
-    const apiVersions = ['v1', 'v1beta']; // v1 우선 시도 (안정성)
+    const apiVersions = ['v1beta', 'v1']; // v1beta 우선 (최신 기능 지원)
     for (const ver of apiVersions) {
       try {
         const payload: any = {
@@ -147,8 +177,8 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
           }
         };
 
-        // v1beta에서만 responseMimeType 사용 (v1에서는 간혹 400 유발)
-        if (ver === 'v1beta' && (model.includes('flash') || model.includes('pro'))) {
+        // v1beta에서만 responseMimeType 사용 (v1에서는 400 유발)
+        if (ver === 'v1beta') {
           payload.generationConfig.responseMimeType = 'application/json';
         }
 
@@ -201,6 +231,11 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
           continue;
         }
 
+        // candidates가 없으면 (안전 필터 등) 다음 모델로
+        if (!result.candidates?.length) {
+          lastError = result.promptFeedback?.blockReason ?? 'no candidates';
+          break;
+        }
         if (onStatus) onStatus(`분석 완료! 데이터를 구조화하는 중...`);
         const raw: string = result.candidates[0].content.parts[0].text;
         return parseFirstJSON(raw);

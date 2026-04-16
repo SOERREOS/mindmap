@@ -23,7 +23,7 @@ async function getModels(): Promise<string[]> {
 
   for (const ver of versions) {
     try {
-      const res = await fetch(`https://generativelanguage.googleapis.com/${ver}/models?key=${API_KEY}&pageSize=50`);
+      const res = await fetchWithTimeout(`https://generativelanguage.googleapis.com/${ver}/models?key=${API_KEY}&pageSize=50`, {});
       const data = await res.json();
       if (data.models) {
         data.models.forEach((m: any) => {
@@ -105,6 +105,18 @@ function parseFirstJSON(raw: string): any {
 }
 
 // ── Gemini API 호출 (딥모드 지원 및 폴백 로직) ──────────────────────
+const FETCH_TIMEOUT_MS = 20000; // 20초 타임아웃
+
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(tid);
+  }
+}
+
 const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string) => void): Promise<any> => {
   // API 키 누락 즉시 감지
   if (!API_KEY) {
@@ -140,7 +152,7 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
           payload.generationConfig.responseMimeType = 'application/json';
         }
 
-        const response = await fetch(
+        const response = await fetchWithTimeout(
           `https://generativelanguage.googleapis.com/${ver}/models/${model}:generateContent?key=${API_KEY}`,
           {
             method: 'POST',
@@ -162,7 +174,7 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
           // 만약 필드명 에러(400)가 나면 JSON 모드 없이 텍스트로만 다시 시도
           if (code === 400 && message.includes('responseMimeType')) {
             delete payload.generationConfig.responseMimeType;
-            const retryRes = await fetch(
+            const retryRes = await fetchWithTimeout(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${API_KEY}`,
               {
                 method: 'POST',
@@ -194,8 +206,15 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
         return parseFirstJSON(raw);
       } catch (e: any) {
         // 인증 오류는 재시도 없이 즉시 throw
-        if (e.message.includes('API 키') || e.message.includes('unregistered')) throw e;
-        lastError = e.message;
+        if (e.message?.includes('API 키') || e.message?.includes('unregistered')) throw e;
+        // 타임아웃(AbortError)이면 다음 모델로 넘어감
+        if (e.name === 'AbortError') {
+          evictModel(model);
+          if (onStatus) onStatus(`${model} 응답 없음(타임아웃). 다음 모델로 전환...`);
+          lastError = 'timeout';
+          break;
+        }
+        lastError = e.message ?? String(e);
         break;
       }
     }
@@ -206,8 +225,8 @@ const callGemini = async (prompt: string, deep = false, onStatus?: (msg: string)
     if (onStatus) onStatus(`서버 혼잡도가 높습니다. 3초 후 최후의 수단(Long-Retry)을 실행합니다...`);
     await sleep(3000);
     try {
-      const retryRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${API_KEY}`,
+      const retryRes = await fetchWithTimeout(
+        `https://generativelanguage.googleapis.com/v1/models/gemini-2.0-flash:generateContent?key=${API_KEY}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

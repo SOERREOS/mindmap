@@ -399,7 +399,8 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
     try {
       const currentNodes = getNodes();
       const parent = currentNodes.find(n => n.id === parentId);
-      if (!parent) return;
+      const parentPos = parent?.position ?? { x: 0, y: 0 };
+      if (!parent && parentId !== 'root') return;
       const res: CorePinchResponse = await pinchCorePoints(idea);
 
       const n = res.questions.length;
@@ -408,13 +409,13 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
         ...res.questions.map((q, i) => ({
           id: `q-${ts}-${i}`,
           type: 'pinch' as const,
-          position: { x: parent.position.x + (i - (n - 1) / 2) * 310, y: parent.position.y + 300 },
+          position: { x: parentPos.x + (i - (n - 1) / 2) * 310, y: parentPos.y + 300 },
           data: { label: q.description, variant: 'question' as const, onPinch: handlePinch, onEdit: handleEdit },
         })),
         ...res.suggestions.map((s, i) => ({
           id: `s-${ts}-${i}`,
           type: 'pinch' as const,
-          position: { x: parent.position.x + (i - (res.suggestions.length - 1) / 2) * 330, y: parent.position.y + 590 },
+          position: { x: parentPos.x + (i - (res.suggestions.length - 1) / 2) * 330, y: parentPos.y + 590 },
           data: {
             label: s.description,
             variant: 'suggestion' as const,
@@ -426,7 +427,7 @@ function CorePointPinchingContent({ initialIdea, onReset, initialData }: { initi
         ...(res.aiPerspective ? [{
           id: `perspective-${ts}`,
           type: 'pinch' as const,
-          position: { x: parent.position.x + (n + 1) * 170, y: parent.position.y + 150 },
+          position: { x: parentPos.x + (n + 1) * 170, y: parentPos.y + 150 },
           data: {
             label: res.aiPerspective,
             variant: 'perspective' as const,

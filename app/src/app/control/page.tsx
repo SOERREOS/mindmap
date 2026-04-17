@@ -110,10 +110,12 @@ function loadLocalProjects(): Project[] {
 }
 
 // ── API ───────────────────────────────────────────────────────
+// 브라우저 → /api/sheets (Next.js 서버) → Apps Script (CORS 우회)
 async function fetchTasks(date: string): Promise<Task[]> {
   if (!SCRIPT_URL) return loadLocalTasks(date);
   try {
-    const res = await fetch(`${SCRIPT_URL}?action=getTasks&date=${date}`);
+    const res = await fetch(`/api/sheets?action=getTasks&date=${date}`);
+    if (!res.ok) return loadLocalTasks(date);
     return res.json();
   } catch { return loadLocalTasks(date); }
 }
@@ -121,7 +123,8 @@ async function fetchTasks(date: string): Promise<Task[]> {
 async function fetchProjects(): Promise<Project[]> {
   if (!SCRIPT_URL) return loadLocalProjects();
   try {
-    const res = await fetch(`${SCRIPT_URL}?action=getProjects`);
+    const res = await fetch(`/api/sheets?action=getProjects`);
+    if (!res.ok) return loadLocalProjects();
     return res.json();
   } catch { return loadLocalProjects(); }
 }
@@ -129,7 +132,7 @@ async function fetchProjects(): Promise<Project[]> {
 async function apiPost(body: object) {
   if (!SCRIPT_URL) return;
   try {
-    await fetch(SCRIPT_URL, {
+    await fetch('/api/sheets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),

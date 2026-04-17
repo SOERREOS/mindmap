@@ -724,7 +724,7 @@ export default function DashboardPage() {
               </div>
               <h1 style={{ fontSize: 'clamp(38px,5vw,64px)', fontWeight: 800, color: 'var(--text)', lineHeight: 1.02, letterSpacing: '-0.03em', fontFamily: font }}>
                 {DAY_NAMES[sel.getDay()]}, {sel.getDate()}
-                <span style={{ fontSize: 'clamp(18px,2.2vw,28px)', fontWeight: 300, color: 'var(--muted)', marginLeft: 16, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
+                <span style={{ fontVariantNumeric: 'tabular-nums', marginLeft: 12 }}>
                   {String(now.getHours()).padStart(2,'0')}:{String(now.getMinutes()).padStart(2,'0')}:{String(now.getSeconds()).padStart(2,'0')}
                 </span>
               </h1>

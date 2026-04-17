@@ -67,6 +67,9 @@ function saveTasks(date: string, tasks: Task[]) {
 function loadAllTasks(): Record<string, Task[]> {
   try { return JSON.parse(localStorage.getItem(TASKS_KEY) ?? '{}'); } catch { return {}; }
 }
+function saveAllTasks(all: Record<string, Task[]>) {
+  try { localStorage.setItem(TASKS_KEY, JSON.stringify(all)); } catch {}
+}
 function loadProjects(): Project[] {
   try { return JSON.parse(localStorage.getItem(PROJECTS_KEY) ?? '[]'); } catch { return []; }
 }
@@ -94,10 +97,16 @@ async function apiPost(body: object): Promise<{ ok: boolean }> {
   return { ok: true };
 }
 
-async function fetchTasksRemote(date: string): Promise<Task[] | null> {
+async function fetchAllTasksRemote(): Promise<Record<string, Task[]> | null> {
   try {
-    const d = await apiGet(`action=getTasks&date=${date}`);
-    return Array.isArray(d) && d.length > 0 ? d : null;
+    const d = await apiGet('action=getAllTasks');
+    if (!Array.isArray(d)) return null;
+    const grouped: Record<string, Task[]> = {};
+    for (const task of d) {
+      if (!grouped[task.date]) grouped[task.date] = [];
+      grouped[task.date].push(task);
+    }
+    return grouped;
   } catch { return null; }
 }
 async function fetchProjectsRemote(): Promise<Project[] | null> {
@@ -363,13 +372,12 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
 }
 
 // ── MonthBar ──────────────────────────────────────────────────
-function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
+function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
   year: number; month: number; selectedYMD: string;
-  cats: Category[]; onDayClick: (date: Date) => void;
+  cats: Category[]; allTasks: Record<string, Task[]>; onDayClick: (date: Date) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const days = getDaysInMonth(year, month);
-  const allTasks = loadAllTasks();
   const todayYMD = toYMD(new Date());
   const prefix = `${year}-${String(month+1).padStart(2,'0')}`;
   const catMap = Object.fromEntries(cats.map(c => [c.key, c.color]));
@@ -429,6 +437,7 @@ export default function DashboardPage() {
   const [authed, setAuthed] = useState(false);
   const [sel, setSel] = useState(new Date());
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [allTasks, setAllTasks] = useState<Record<string, Task[]>>({});
   const [projects, setProjects] = useState<Project[]>([]);
   const [cats, setCats] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [goal, setGoal] = useState('');
@@ -476,17 +485,25 @@ export default function DashboardPage() {
     fetchProjectsRemote().then(remote => { if (remote) { setProjects(remote); saveProjects(remote); } });
     const today = new Date(); setSel(today);
     setGoal(localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '');
+
+    // 전체 task 한 번에 로드
+    const localAll = loadAllTasks();
+    setAllTasks(localAll);
+    setTasks(localAll[toYMD(today)] ?? []);
+    fetchAllTasksRemote().then(all => {
+      if (all) {
+        setAllTasks(all);
+        saveAllTasks(all);
+        setTasks(all[toYMD(today)] ?? []);
+      }
+    });
   }, [authed]);
 
-  // Tasks per date
+  // 날짜 변경 시 allTasks에서 즉시 반영 (네트워크 요청 없음)
   useEffect(() => {
     if (!authed) return;
-    const selYMD = toYMD(sel);
-    setTasks(loadTasks(selYMD));
-    fetchTasksRemote(selYMD).then(remote => {
-      if (remote) { setTasks(remote); saveTasks(selYMD, remote); }
-    });
-  }, [authed, sel]);
+    setTasks(allTasks[toYMD(sel)] ?? loadTasks(toYMD(sel)));
+  }, [sel, allTasks]);
 
   // Category handlers
   const handleCatUpdate = (key: string, field: 'label' | 'color', val: string) => {
@@ -521,20 +538,43 @@ export default function DashboardPage() {
   // Task handlers
   const handleToggle = (task: Task) => {
     const done = !task.done;
-    setTasks(prev => { const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done } : t); saveTasks(toYMD(sel), u); return u; });
+    const d = toYMD(sel);
+    setTasks(prev => {
+      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done } : t);
+      saveTasks(d, u);
+      setAllTasks(a => { const n = { ...a, [d]: u }; saveAllTasks(n); return n; });
+      return u;
+    });
     syncPost({ action: 'updateTask', createdAt: task.createdAt, done });
   };
   const handleUpdate = (task: Task, title: string, category: string, description: string) => {
-    setTasks(prev => { const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category, description } : t); saveTasks(toYMD(sel), u); return u; });
+    const d = toYMD(sel);
+    setTasks(prev => {
+      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category, description } : t);
+      saveTasks(d, u);
+      setAllTasks(a => { const n = { ...a, [d]: u }; saveAllTasks(n); return n; });
+      return u;
+    });
     syncPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description });
   };
   const handleDelete = (task: Task) => {
-    setTasks(prev => { const u = prev.filter(t => t.createdAt !== task.createdAt); saveTasks(toYMD(sel), u); return u; });
+    const d = toYMD(sel);
+    setTasks(prev => {
+      const u = prev.filter(t => t.createdAt !== task.createdAt);
+      saveTasks(d, u);
+      setAllTasks(a => { const n = { ...a, [d]: u }; saveAllTasks(n); return n; });
+      return u;
+    });
     syncPost({ action: 'deleteTask', createdAt: task.createdAt });
   };
   const handleAdd = (newTask: Omit<Task, 'done'>) => {
     const task: Task = { ...newTask, done: false };
-    setTasks(prev => { const u = [...prev, task]; saveTasks(newTask.date, u); return u; });
+    setTasks(prev => {
+      const u = [...prev, task];
+      saveTasks(newTask.date, u);
+      setAllTasks(a => { const n = { ...a, [newTask.date]: u }; saveAllTasks(n); return n; });
+      return u;
+    });
     syncPost({ action: 'addTask', ...task });
   };
 
@@ -698,7 +738,7 @@ export default function DashboardPage() {
         </div>
       </main>
 
-      <MonthBar year={sel.getFullYear()} month={sel.getMonth()} selectedYMD={selYMD} cats={cats} onDayClick={setSel} />
+      <MonthBar year={sel.getFullYear()} month={sel.getMonth()} selectedYMD={selYMD} cats={cats} allTasks={allTasks} onDayClick={setSel} />
 
       {showSettings && <SettingsPanel cats={cats} onUpdate={handleCatUpdate} onAdd={handleCatAdd} onDelete={handleCatDelete} onClose={() => setShowSettings(false)} />}
       {showAddTask && <AddTaskModal cats={cats} defaultDate={selYMD} onAdd={handleAdd} onClose={() => setShowAddTask(false)} />}

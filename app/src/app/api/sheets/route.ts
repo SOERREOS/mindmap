@@ -37,6 +37,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ ok: true, sheets: ['tasks', 'projects', 'categories'] });
     }
 
+    if (action === 'getAllTasks') {
+      const rows = await sb('tasks?order=date.asc,createdAt.asc');
+      return NextResponse.json(rows ?? []);
+    }
+
     if (action === 'getTasks') {
       const date = p.get('date');
       if (!date) throw new Error('date required');

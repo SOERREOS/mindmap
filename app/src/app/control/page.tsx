@@ -157,37 +157,50 @@ function TaskCard({ task, cats, onToggle, onEdit, onDelete }: {
   onToggle: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   const catObj = cats.find(c => c.key === task.category);
-  const color = catObj?.color ?? '#888';
+  const color = catObj?.color ?? 'var(--muted)';
   const isRange = task.deadline && task.deadline > task.date;
+  const isDone = task.done;
   return (
-    <div onClick={() => !task.done && onEdit()}
-      style={{ background: color, borderRadius: 16, padding: '14px 14px 12px',
-        opacity: task.done ? 0.5 : 1, transition: 'opacity 0.2s',
-        cursor: task.done ? 'default' : 'pointer',
-        display: 'flex', flexDirection: 'column', minHeight: 110 }}>
-      <p style={{ fontFamily: font, fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 6, lineHeight: 1.35,
+    <div onClick={() => !isDone && onEdit()}
+      style={{
+        background: isDone ? 'transparent' : color,
+        border: `2px solid ${color}`,
+        borderRadius: 16, padding: '12px 12px 10px',
+        transition: 'background 0.2s, border 0.2s',
+        cursor: isDone ? 'default' : 'pointer',
+        display: 'flex', flexDirection: 'column', minHeight: 110,
+      }}>
+      <p style={{ fontFamily: font, fontSize: 16, fontWeight: 800,
+        color: isDone ? color : '#fff',
+        marginBottom: 6, lineHeight: 1.35,
         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        textDecoration: task.done ? 'line-through' : 'none', flex: 1 }}>
+        textDecoration: isDone ? 'line-through' : 'none', flex: 1 }}>
         {task.title}
       </p>
-      <p style={{ fontFamily: font, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: isRange ? 4 : 10 }}>
+      <p style={{ fontFamily: font, fontSize: 11,
+        color: isDone ? 'var(--muted)' : 'rgba(255,255,255,0.7)',
+        marginBottom: isRange ? 4 : 10 }}>
         {catObj?.label ?? task.category}
       </p>
       {isRange && (
-        <p style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>
+        <p style={{ fontFamily: font, fontSize: 10,
+          color: isDone ? 'var(--muted)' : 'rgba(255,255,255,0.6)',
+          marginBottom: 8 }}>
           {task.date.slice(5)} → {task.deadline!.slice(5)}
         </p>
       )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.45)', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+          style={{ background: 'none', border: 'none', cursor: 'pointer',
+            color: isDone ? 'var(--muted)' : 'rgba(255,255,255,0.45)',
+            fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
         <button onClick={e => { e.stopPropagation(); onToggle(); }}
           style={{ width: 22, height: 22, borderRadius: '50%',
-            border: `2px solid ${task.done ? '#fff' : 'rgba(255,255,255,0.5)'}`,
-            background: task.done ? '#fff' : 'transparent',
+            border: `2px solid ${isDone ? color : 'rgba(255,255,255,0.5)'}`,
+            background: isDone ? color : 'transparent',
             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             padding: 0, transition: 'all 0.15s', flexShrink: 0 }}>
-          {task.done && <span style={{ color: color, fontSize: 9, fontWeight: 800 }}>✓</span>}
+          {isDone && <span style={{ color: '#fff', fontSize: 9, fontWeight: 800 }}>✓</span>}
         </button>
       </div>
     </div>
@@ -432,7 +445,7 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
   const catMap = Object.fromEntries(cats.map(c => [c.key, c.color]));
   const counts = Array.from({ length: days }, (_, i) => {
     const ds = `${prefix}-${String(i+1).padStart(2,'0')}`;
-    return getTasksForDate(allTasks, ds).filter(t => !t.done).length;
+    return getTasksForDate(allTasks, ds).length;
   });
   const maxCount = Math.max(...counts, 1);
   const BAR_MAX = 52;
@@ -453,24 +466,38 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
             const day = i + 1;
             const dateStr = `${prefix}-${String(day).padStart(2,'0')}`;
             const dayTasks = getTasksForDate(allTasks, dateStr);
-            const activeTasks = dayTasks.filter(t => !t.done);
+            const undone = dayTasks.filter(t => !t.done);
+            const done = dayTasks.filter(t => t.done);
             const isSel = dateStr === selectedYMD;
             const isToday = dateStr === todayYMD;
-            const barH = activeTasks.length === 0 ? 4 : Math.max(8, Math.round((activeTasks.length / maxCount) * BAR_MAX));
+            const barH = dayTasks.length === 0 ? 4 : Math.max(8, Math.round((dayTasks.length / maxCount) * BAR_MAX));
+            const visibleSlices = [
+              ...undone.slice(0, 6).map(t => ({ color: catMap[t.category] ?? 'var(--muted)', done: false })),
+              ...done.slice(0, 2).map(t => ({ color: catMap[t.category] ?? 'var(--muted)', done: true })),
+            ];
             return (
               <button key={day} onClick={() => onDayClick(new Date(year, month, day))}
                 title={`${month+1}/${day} — ${dayTasks.length}개`}
                 className="dash-day-btn"
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 20 }}>
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 28 }}>
                 <div style={{ width: '100%', height: barH, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
-                  {activeTasks.length === 0
+                  {visibleSlices.length === 0
                     ? <div style={{ width: '100%', flex: 1, background: 'var(--border)', borderRadius: 3 }} />
-                    : activeTasks.slice(0, 8).map((t, ti) => (
-                        <div key={ti} style={{ width: '100%', flex: 1, background: catMap[t.category] ?? '#ccc', minHeight: 3, borderRadius: 1 }} />
+                    : visibleSlices.map((s, ti) => (
+                        <div key={ti} style={{ width: '100%', flex: 1, minHeight: 3, borderRadius: 1,
+                          background: s.done ? 'transparent' : s.color,
+                          border: s.done ? `1px solid ${s.color}` : 'none' }} />
                       ))
                   }
                 </div>
-                <span style={{ fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: isSel ? 'var(--text)' : isToday ? 'var(--text-sub)' : 'var(--border)', fontWeight: isSel || isToday ? 700 : 400, borderBottom: isSel ? '1.5px solid var(--text)' : '1.5px solid transparent', paddingBottom: 1 }}>{day}</span>
+                <span style={{ fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                  color: isSel ? 'var(--text)' : isToday ? 'var(--text)' : 'var(--border)',
+                  fontWeight: isSel || isToday ? 700 : 400,
+                  borderBottom: isSel ? '1.5px solid var(--text)' : '1.5px solid transparent',
+                  paddingBottom: 1 }}>{day}</span>
+                <div style={{ width: 3, height: 3, borderRadius: '50%',
+                  background: isToday ? 'var(--text)' : 'transparent',
+                  marginTop: 1, flexShrink: 0 }} />
               </button>
             );
           })}
@@ -653,6 +680,16 @@ export default function DashboardPage() {
     const u = projects.filter(p => p.id !== id); setProjects(u); saveProjects(u);
     syncPost({ action: 'deleteProject', id });
   };
+  const handleUpdateProjectProgress = (id: string, progress: number) => {
+    setProjects(prev => {
+      const u = prev.map(p => p.id === id ? { ...p, progress } : p);
+      saveProjects(u);
+      return u;
+    });
+  };
+  const handleSyncProjectProgress = (id: string, progress: number) => {
+    syncPost({ action: 'updateProject', id, progress });
+  };
 
   const saveGoal = () => { localStorage.setItem(`${GOAL_KEY}_${toYMD(new Date())}`, goal); setGoalEditing(false); };
   const logout = () => { sessionStorage.removeItem(SESSION_KEY); window.location.replace('/'); };
@@ -684,7 +721,7 @@ export default function DashboardPage() {
           --cancel-bg:#252525;--cancel-col:#888888;--tab-bg:#252525;
         }
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{background:var(--bg);transition:background 0.2s;}
+        body{background:var(--bg);transition:background 0.2s;overflow:auto !important;}
         ::-webkit-scrollbar{width:0;height:0;}
         input,select,textarea{color:var(--text) !important;background:var(--input-bg) !important;font-family:${font};}
         input::placeholder,textarea::placeholder{color:var(--muted) !important;}
@@ -743,10 +780,10 @@ export default function DashboardPage() {
           <div style={{ marginBottom: 44 }}>
             {goalEditing
               ? <input autoFocus value={goal} onChange={e => setGoal(e.target.value)} onBlur={saveGoal}
-                  onKeyDown={e => e.key === 'Enter' && saveGoal()} placeholder="오늘의 목표..."
-                  style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', outline: 'none', width: '100%', fontFamily: font, fontSize: 18, color: 'var(--text)', padding: '4px 0' }} />
-              : <p onClick={() => setGoalEditing(true)} style={{ fontSize: 18, color: goal ? 'var(--text)' : 'var(--border)', cursor: 'text', padding: '4px 0', fontFamily: font }}>
-                  {goal || '오늘의 목표...'}
+                  onKeyDown={e => e.key === 'Enter' && saveGoal()} placeholder="각오, 다짐..."
+                  style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', outline: 'none', width: '100%', fontFamily: 'Georgia, "Times New Roman", serif', fontSize: 28, color: 'var(--text)', padding: '4px 0', fontStyle: 'italic' }} />
+              : <p onClick={() => setGoalEditing(true)} style={{ fontSize: 28, color: goal ? 'var(--text)' : 'var(--border)', cursor: 'text', padding: '4px 0', fontFamily: 'Georgia, "Times New Roman", serif', fontStyle: 'italic', lineHeight: 1.4 }}>
+                  {goal || '각오, 다짐...'}
                 </p>
             }
           </div>
@@ -807,11 +844,14 @@ export default function DashboardPage() {
                           </p>
                         </div>
                         <p style={{ fontFamily: font, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 'auto', paddingBottom: 10 }}>{catObj?.label ?? p.category}</p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.25)', borderRadius: 999 }}>
-                            <div style={{ height: '100%', width: `${p.progress}%`, background: 'rgba(255,255,255,0.85)', borderRadius: 999, transition: 'width 0.4s' }} />
-                          </div>
-                          <span style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.65)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{p.progress}%</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input type="range" min={0} max={100} value={p.progress}
+                            onChange={e => handleUpdateProjectProgress(p.id, Number(e.target.value))}
+                            onMouseUp={e => handleSyncProjectProgress(p.id, Number((e.target as HTMLInputElement).value))}
+                            onTouchEnd={e => handleSyncProjectProgress(p.id, Number((e.target as HTMLInputElement).value))}
+                            onClick={e => e.stopPropagation()}
+                            style={{ flex: 1, accentColor: 'rgba(255,255,255,0.85)', height: 3, cursor: 'pointer' }} />
+                          <span style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.75)', fontVariantNumeric: 'tabular-nums', flexShrink: 0, minWidth: 26, textAlign: 'right' as const }}>{p.progress}%</span>
                           <button onClick={() => handleDeleteProject(p.id)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }}>✕</button>
                         </div>

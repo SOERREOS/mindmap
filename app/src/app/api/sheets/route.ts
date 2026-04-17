@@ -4,12 +4,22 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxldrSXgxrvunlbexWOL
 
 async function callScript(params: URLSearchParams): Promise<any> {
   const url = `${SCRIPT_URL}?${params.toString()}`;
-  const res = await fetch(url, { cache: 'no-store' });
-  const text = await res.text();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Apps Script non-JSON response: ${text.slice(0, 300)}`);
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal, redirect: 'follow' });
+    const text = await res.text();
+    if (!text.trim()) throw new Error('Apps Script returned empty response');
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Apps Script non-JSON: ${text.slice(0, 200)}`);
+    }
+  } catch (e: any) {
+    if (e.name === 'AbortError') throw new Error('Apps Script timeout (8s)');
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
 }
 

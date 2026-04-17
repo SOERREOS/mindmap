@@ -70,6 +70,17 @@ function loadAllTasks(): Record<string, Task[]> {
 function saveAllTasks(all: Record<string, Task[]>) {
   try { localStorage.setItem(TASKS_KEY, JSON.stringify(all)); } catch {}
 }
+// 날짜 범위를 고려해 해당 날의 태스크를 반환
+function getTasksForDate(all: Record<string, Task[]>, date: string): Task[] {
+  const result: Task[] = [];
+  for (const tasks of Object.values(all)) {
+    for (const t of tasks) {
+      const end = (t.deadline && t.deadline >= t.date) ? t.deadline : t.date;
+      if (t.date <= date && date <= end) result.push(t);
+    }
+  }
+  return result;
+}
 function loadProjects(): Project[] {
   try { return JSON.parse(localStorage.getItem(PROJECTS_KEY) ?? '[]'); } catch { return []; }
 }
@@ -140,35 +151,43 @@ function ghostBtn(small = false): React.CSSProperties {
   };
 }
 
-// ── TaskCard (compact grid) ───────────────────────────────────
+// ── TaskCard (solid color block) ──────────────────────────────
 function TaskCard({ task, cats, onToggle, onEdit, onDelete }: {
   task: Task; cats: Category[];
   onToggle: () => void; onEdit: () => void; onDelete: () => void;
 }) {
   const catObj = cats.find(c => c.key === task.category);
-  const color = catObj?.color ?? '#ccc';
+  const color = catObj?.color ?? '#888';
+  const isRange = task.deadline && task.deadline > task.date;
   return (
     <div onClick={() => !task.done && onEdit()}
-      style={{ ...card, padding: '14px 14px 12px', opacity: task.done ? 0.45 : 1, transition: 'opacity 0.2s', cursor: task.done ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', minHeight: 110, position: 'relative', overflow: 'hidden' }}>
-      {/* top color bar */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
-      {/* title */}
-      <p style={{ fontFamily: font, fontSize: 14, fontWeight: 500, color: '#111', marginTop: 6, marginBottom: 6, lineHeight: 1.4,
+      style={{ background: color, borderRadius: 16, padding: '14px 14px 12px',
+        opacity: task.done ? 0.5 : 1, transition: 'opacity 0.2s',
+        cursor: task.done ? 'default' : 'pointer',
+        display: 'flex', flexDirection: 'column', minHeight: 110 }}>
+      <p style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 6, lineHeight: 1.4,
         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         textDecoration: task.done ? 'line-through' : 'none', flex: 1 }}>
         {task.title}
       </p>
-      <p style={{ ...lbl, marginBottom: 10, fontSize: 11 }}>
-        {catObj?.label ?? task.category}{task.deadline ? ` · ${task.deadline.slice(5)}` : ''}
+      <p style={{ fontFamily: font, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: isRange ? 4 : 10 }}>
+        {catObj?.label ?? task.category}
       </p>
+      {isRange && (
+        <p style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.6)', marginBottom: 8 }}>
+          {task.date.slice(5)} → {task.deadline!.slice(5)}
+        </p>
+      )}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <button onClick={e => { e.stopPropagation(); onDelete(); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.45)', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
         <button onClick={e => { e.stopPropagation(); onToggle(); }}
-          style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${task.done ? color : '#e0e0e0'}`,
-            background: task.done ? color : 'transparent', cursor: 'pointer', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 0.15s', flexShrink: 0 }}>
-          {task.done && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+          style={{ width: 22, height: 22, borderRadius: '50%',
+            border: `2px solid ${task.done ? '#fff' : 'rgba(255,255,255,0.5)'}`,
+            background: task.done ? '#fff' : 'transparent',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 0, transition: 'all 0.15s', flexShrink: 0 }}>
+          {task.done && <span style={{ color: color, fontSize: 9, fontWeight: 800 }}>✓</span>}
         </button>
       </div>
     </div>
@@ -219,26 +238,59 @@ function AddTaskModal({ cats, defaultDate, onAdd, onClose }: {
 }) {
   const [title, setTitle] = useState('');
   const [cat, setCat] = useState(cats[0]?.key ?? '');
-  const [deadline, setDeadline] = useState('');
   const [desc, setDesc] = useState('');
+  const [rangeMode, setRangeMode] = useState(false);
+  const [startDate, setStartDate] = useState(defaultDate);
+  const [endDate, setEndDate] = useState(defaultDate);
+
   const submit = () => {
     if (!title.trim()) return;
-    onAdd({ date: defaultDate, title: title.trim(), description: desc.trim(), category: cat, createdAt: new Date().toISOString(), deadline });
+    const date = rangeMode ? startDate : defaultDate;
+    const deadline = rangeMode ? endDate : '';
+    onAdd({ date, title: title.trim(), description: desc.trim(), category: cat, createdAt: new Date().toISOString(), deadline });
     onClose();
   };
+
+  const tabBtn = (active: boolean) => ({
+    flex: 1, padding: '8px', border: 'none', borderRadius: 10,
+    fontFamily: font, fontSize: 13, cursor: 'pointer',
+    background: active ? '#111' : 'transparent', color: active ? '#fff' : '#aaa', fontWeight: active ? 600 : 400,
+  });
+
   return (
     <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
-        <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>할 일 추가</p>
-        <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="할 일 입력..." style={{ ...inp, marginBottom: 10 }} />
+        <p style={{ ...ttl, fontSize: 17, marginBottom: 16 }}>할 일 추가</p>
+
+        {/* 당일 / 기간 토글 */}
+        <div style={{ display: 'flex', background: '#f5f5f5', borderRadius: 12, padding: 4, marginBottom: 16 }}>
+          <button style={tabBtn(!rangeMode)} onClick={() => setRangeMode(false)}>당일</button>
+          <button style={tabBtn(rangeMode)} onClick={() => setRangeMode(true)}>기간 설정</button>
+        </div>
+
+        {rangeMode && (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...lbl, marginBottom: 5 }}>시작일</p>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inp }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...lbl, marginBottom: 5 }}>마감일</p>
+              <input type="date" value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} style={{ ...inp }} />
+            </div>
+          </div>
+        )}
+
+        <input autoFocus value={title} onChange={e => setTitle(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submit()} placeholder="할 일 입력..."
+          style={{ ...inp, marginBottom: 10 }} />
         <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
           {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
-        <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="상세 설명 (선택)..." rows={3}
-          style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 10, minHeight: 72 }} />
-        <p style={{ ...lbl, marginBottom: 6 }}>마감일 (선택)</p>
-        <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={{ ...inp, marginBottom: 24 }} />
+        <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="상세 설명 (선택)..." rows={2}
+          style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 20, minHeight: 60 }} />
+
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '13px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: '#fafafa', color: '#888' }}>취소</button>
           <button onClick={submit} style={{ flex: 1, padding: '13px', border: 'none', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}>추가</button>
@@ -366,7 +418,7 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
   const catMap = Object.fromEntries(cats.map(c => [c.key, c.color]));
   const counts = Array.from({ length: days }, (_, i) => {
     const ds = `${prefix}-${String(i+1).padStart(2,'0')}`;
-    return (allTasks[ds] ?? []).filter(t => !t.done).length;
+    return getTasksForDate(allTasks, ds).filter(t => !t.done).length;
   });
   const maxCount = Math.max(...counts, 1);
   const BAR_MAX = 52;
@@ -386,7 +438,7 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
           {Array.from({ length: days }, (_, i) => {
             const day = i + 1;
             const dateStr = `${prefix}-${String(day).padStart(2,'0')}`;
-            const dayTasks = allTasks[dateStr] ?? [];
+            const dayTasks = getTasksForDate(allTasks, dateStr);
             const activeTasks = dayTasks.filter(t => !t.done);
             const isSel = dateStr === selectedYMD;
             const isToday = dateStr === todayYMD;
@@ -473,20 +525,20 @@ export default function DashboardPage() {
     // 전체 task 한 번에 로드
     const localAll = loadAllTasks();
     setAllTasks(localAll);
-    setTasks(localAll[toYMD(today)] ?? []);
+    setTasks(getTasksForDate(localAll, toYMD(today)));
     fetchAllTasksRemote().then(all => {
       if (all) {
         setAllTasks(all);
         saveAllTasks(all);
-        setTasks(all[toYMD(today)] ?? []);
+        setTasks(getTasksForDate(all, toYMD(today)));
       }
     });
   }, [authed]);
 
-  // 날짜 변경 시 allTasks에서 즉시 반영 (네트워크 요청 없음)
+  // 날짜 변경 시 allTasks에서 즉시 반영 (range 포함, 네트워크 요청 없음)
   useEffect(() => {
     if (!authed) return;
-    setTasks(allTasks[toYMD(sel)] ?? loadTasks(toYMD(sel)));
+    setTasks(getTasksForDate(allTasks, toYMD(sel)));
   }, [sel, allTasks]);
 
   // Category handlers
@@ -700,25 +752,24 @@ export default function DashboardPage() {
                     const catObj = cats.find(c => c.key === p.category);
                     const color = catObj?.color ?? '#888';
                     return (
-                      <div key={p.id} style={{ ...card, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', minHeight: 110, position: 'relative', overflow: 'hidden' }}>
-                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 6, marginBottom: 4 }}>
-                          <p style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: '#111', lineHeight: 1.3,
+                      <div key={p.id} style={{ background: color, borderRadius: 16, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', minHeight: 110 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                          <p style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.3,
                             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1, marginRight: 6 }}>
                             {p.name}
                           </p>
-                          <p style={{ fontFamily: font, fontSize: 12, fontWeight: 700, color: dday >= 0 && dday <= 7 ? '#ef4444' : '#aaa', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                          <p style={{ fontFamily: font, fontSize: 12, fontWeight: 700, color: dday >= 0 && dday <= 3 ? 'rgba(255,255,100,0.95)' : 'rgba(255,255,255,0.65)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                             {dday >= 0 ? `D-${dday}` : `D+${Math.abs(dday)}`}
                           </p>
                         </div>
-                        <p style={{ ...lbl, fontSize: 11, marginBottom: 'auto', paddingBottom: 10 }}>{catObj?.label ?? p.category}</p>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                          <div style={{ flex: 1, height: 3, background: '#f0f0f0', borderRadius: 999 }}>
-                            <div style={{ height: '100%', width: `${p.progress}%`, background: color, borderRadius: 999, transition: 'width 0.4s' }} />
+                        <p style={{ fontFamily: font, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 'auto', paddingBottom: 10 }}>{catObj?.label ?? p.category}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ flex: 1, height: 3, background: 'rgba(255,255,255,0.25)', borderRadius: 999 }}>
+                            <div style={{ height: '100%', width: `${p.progress}%`, background: 'rgba(255,255,255,0.85)', borderRadius: 999, transition: 'width 0.4s' }} />
                           </div>
-                          <span style={{ ...lbl, fontSize: 10, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{p.progress}%</span>
+                          <span style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.65)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{p.progress}%</span>
                           <button onClick={() => handleDeleteProject(p.id)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }}>✕</button>
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }}>✕</button>
                         </div>
                       </div>
                     );

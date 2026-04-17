@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 
 // ── Constants ─────────────────────────────────────────────────
 const SESSION_KEY = 'dashboard_auth';
-const SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL ?? '';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxldrSXgxrvunlbexWOLLyyi24r3hMp0XBk_d-gP6I6_vyGJmfsjTjFziAYPYIErT04mg/exec';
 const TASKS_KEY = 'dashboard_tasks';
 const PROJECTS_KEY = 'dashboard_projects';
 const CATEGORIES_KEY = 'dashboard_categories';

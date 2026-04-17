@@ -235,9 +235,9 @@ function AddTaskModal({ cats, defaultDate, onAdd, onClose }: {
     onClose();
   };
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+      <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>할 일 추가</p>
         <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="할 일 입력..." style={{ ...inp, marginBottom: 10 }} />
         <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
@@ -271,9 +271,9 @@ function AddProjectModal({ cats, onAdd, onClose }: {
     onClose();
   };
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+    <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+      <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>진행 중 추가</p>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="항목 이름..." style={{ ...inp, marginBottom: 10 }} />
         <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
@@ -321,7 +321,7 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: '#fff', borderLeft: '1px solid #ebebeb', padding: '36px 24px', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,0.07)', overflowY: 'auto' }}>
+      <div className="dash-settings" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: '#fff', borderLeft: '1px solid #ebebeb', padding: '36px 24px', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,0.07)', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
           <p style={{ ...ttl, fontSize: 16 }}>설정</p>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: 18 }}>✕</button>
@@ -367,6 +367,7 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
   year: number; month: number; selectedYMD: string;
   cats: Category[]; onDayClick: (date: Date) => void;
 }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const days = getDaysInMonth(year, month);
   const allTasks = loadAllTasks();
   const todayYMD = toYMD(new Date());
@@ -379,11 +380,18 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
   const maxCount = Math.max(...counts, 1);
   const BAR_MAX = 52;
 
+  useEffect(() => {
+    if (!scrollRef.current) return;
+    const day = parseInt(selectedYMD.split('-')[2], 10);
+    const btn = scrollRef.current.children[day - 1] as HTMLElement;
+    btn?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [selectedYMD]);
+
   return (
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#f8f8f6', borderTop: '1px solid #ebebeb' }}>
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#f8f8f6', borderTop: '1px solid #ebebeb', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div style={{ padding: '10px 4vw 16px' }}>
         <p style={{ ...lbl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{MONTH_NAMES[month]} {year}</p>
-        <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
+        <div ref={scrollRef} className="dash-month-scroll">
           {Array.from({ length: days }, (_, i) => {
             const day = i + 1;
             const dateStr = `${prefix}-${String(day).padStart(2,'0')}`;
@@ -395,7 +403,8 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
             return (
               <button key={day} onClick={() => onDayClick(new Date(year, month, day))}
                 title={`${month+1}/${day} — ${dayTasks.length}개`}
-                style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 20 }}>
+                className="dash-day-btn"
+                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 20 }}>
                 <div style={{ width: '100%', height: barH, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
                   {activeTasks.length === 0
                     ? <div style={{ width: '100%', flex: 1, background: '#ebebeb', borderRadius: 3 }} />
@@ -567,10 +576,21 @@ export default function DashboardPage() {
         input[type="range"]{accent-color:#111;}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         .syncing{animation:pulse 1s ease-in-out infinite;}
+        .dash-pad{padding:48px 6vw 0;}
+        .dash-day-btn{flex:1;}
+        .dash-month-scroll{display:flex;gap:2px;align-items:flex-end;}
+        @media(max-width:640px){
+          .dash-pad{padding:28px 5vw 0 !important;}
+          .dash-sheet-overlay{align-items:flex-end !important;}
+          .dash-sheet-box{width:100% !important;border-radius:20px 20px 0 0 !important;max-height:88vh;overflow-y:auto;padding-bottom:max(env(safe-area-inset-bottom),16px) !important;}
+          .dash-settings{width:100vw !important;}
+          .dash-month-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+          .dash-day-btn{flex:none !important;min-width:34px;}
+        }
       `}</style>
 
-      <main style={{ background: '#f8f8f6', minHeight: '100vh', fontFamily: font, paddingBottom: 140 }}>
-        <div style={{ padding: '48px 6vw 0' }}>
+      <main style={{ background: '#f8f8f6', minHeight: '100vh', fontFamily: font, paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))' }}>
+        <div className="dash-pad">
 
           {/* Header */}
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40 }}>

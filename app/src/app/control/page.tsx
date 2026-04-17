@@ -578,7 +578,16 @@ export default function DashboardPage() {
           {/* ── Header ──────────────────────────────────── */}
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 32 }}>
             <div>
-              <p style={{ fontSize: 11, color: '#aaa', letterSpacing: '0.12em', textTransform: 'uppercase', marginBottom: 8 }}>filum</p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <p style={{ fontSize: 11, color: '#aaa', letterSpacing: '0.12em', textTransform: 'uppercase' }}>filum</p>
+                <span style={{
+                  fontSize: 10, padding: '2px 8px', borderRadius: 999, fontFamily: "'Pretendard', sans-serif",
+                  background: SCRIPT_URL ? '#dcfce7' : '#fef9c3',
+                  color: SCRIPT_URL ? '#16a34a' : '#ca8a04',
+                }}>
+                  {SCRIPT_URL ? 'Sheets 연결됨' : '로컬 저장 중'}
+                </span>
+              </div>
               <h1 style={{
                 fontSize: 'clamp(36px, 8vw, 52px)', fontWeight: 800, color: '#111',
                 lineHeight: 1.05, letterSpacing: '-0.025em', fontFamily: "'Pretendard', sans-serif",

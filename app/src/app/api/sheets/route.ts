@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const runtime = 'edge';
+
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxldrSXgxrvunlbexWOLLyyi24r3hMp0XBk_d-gP6I6_vyGJmfsjTjFziAYPYIErT04mg/exec';
 
 async function callScript(params: URLSearchParams): Promise<any> {
   const url = `${SCRIPT_URL}?${params.toString()}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 25000);
   try {
     const res = await fetch(url, { cache: 'no-store', signal: controller.signal, redirect: 'follow' });
     const text = await res.text();
@@ -16,7 +18,7 @@ async function callScript(params: URLSearchParams): Promise<any> {
       throw new Error(`Apps Script non-JSON: ${text.slice(0, 200)}`);
     }
   } catch (e: any) {
-    if (e.name === 'AbortError') throw new Error('Apps Script timeout (8s)');
+    if (e.name === 'AbortError') throw new Error('Apps Script timeout (25s) — 재시도 해보세요');
     throw e;
   } finally {
     clearTimeout(timer);

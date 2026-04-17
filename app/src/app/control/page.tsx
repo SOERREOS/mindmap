@@ -76,24 +76,27 @@ function saveProjects(p: Project[]) {
 
 // ── API ───────────────────────────────────────────────────────
 async function apiFetchTasks(date: string): Promise<Task[]> {
-  if (!SCRIPT_URL) return loadTasks(date);
+  const local = loadTasks(date);
+  if (!SCRIPT_URL) return local;
   try {
     const res = await fetch(`/api/sheets?action=getTasks&date=${date}`);
-    if (!res.ok) return loadTasks(date);
+    if (!res.ok) return local;
     const data = await res.json();
-    if (data.error) return loadTasks(date);
-    return data;
-  } catch { return loadTasks(date); }
+    if (data.error || !Array.isArray(data)) return local;
+    // Sheets에 데이터 있으면 우선, 없으면 localStorage fallback
+    return data.length > 0 ? data : local;
+  } catch { return local; }
 }
 async function apiFetchProjects(): Promise<Project[]> {
-  if (!SCRIPT_URL) return loadProjects();
+  const local = loadProjects();
+  if (!SCRIPT_URL) return local;
   try {
     const res = await fetch('/api/sheets?action=getProjects');
-    if (!res.ok) return loadProjects();
+    if (!res.ok) return local;
     const data = await res.json();
-    if (data.error) return loadProjects();
-    return data;
-  } catch { return loadProjects(); }
+    if (data.error || !Array.isArray(data)) return local;
+    return data.length > 0 ? data : local;
+  } catch { return local; }
 }
 async function apiPost(body: object) {
   if (!SCRIPT_URL) return;

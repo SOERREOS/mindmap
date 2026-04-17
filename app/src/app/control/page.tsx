@@ -13,7 +13,7 @@ const font = "'Pretendard', sans-serif";
 // ── Types ─────────────────────────────────────────────────────
 interface Category { key: string; label: string; color: string; }
 interface Task {
-  date: string; title: string; category: string;
+  date: string; title: string; description: string; category: string;
   done: boolean; createdAt: string; deadline: string;
 }
 interface Project {
@@ -84,46 +84,35 @@ async function apiGet(params: string): Promise<any> {
 }
 async function apiPost(body: object) {
   if (!SCRIPT_URL) return;
-  try { await fetch('/api/sheets', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); } catch {}
+  try {
+    await fetch('/api/sheets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {}
 }
 
 async function fetchTasksRemote(date: string): Promise<Task[] | null> {
   if (!SCRIPT_URL) return null;
-  try { const d = await apiGet(`action=getTasks&date=${date}`); return Array.isArray(d) && d.length > 0 ? d : null; }
-  catch { return null; }
+  try {
+    const d = await apiGet(`action=getTasks&date=${date}`);
+    return Array.isArray(d) && d.length > 0 ? d : null;
+  } catch { return null; }
 }
 async function fetchProjectsRemote(): Promise<Project[] | null> {
   if (!SCRIPT_URL) return null;
-  try { const d = await apiGet('action=getProjects'); return Array.isArray(d) && d.length > 0 ? d : null; }
-  catch { return null; }
+  try {
+    const d = await apiGet('action=getProjects');
+    return Array.isArray(d) && d.length > 0 ? d : null;
+  } catch { return null; }
 }
 async function fetchCategoriesRemote(): Promise<Category[] | null> {
   if (!SCRIPT_URL) return null;
-  try { const d = await apiGet('action=getCategories'); return Array.isArray(d) && d.length > 0 ? d : null; }
-  catch { return null; }
-}
-
-// ── AI ────────────────────────────────────────────────────────
-async function callAI(prompt: string): Promise<string> {
-  const res = await fetch('/api/ai', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  });
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
-  return data.text;
-}
-
-function buildPrompt(tasks: Task[], projects: Project[], cats: Category[]): string {
-  const catMap = Object.fromEntries(cats.map(c => [c.key, c.label]));
-  const tl = tasks.filter(t => !t.done)
-    .map(t => `- [${catMap[t.category] ?? t.category}] ${t.title}${t.deadline ? ` (마감: ${t.deadline})` : ''}`)
-    .join('\n') || '(없음)';
-  const pl = projects
-    .map(p => { const d = getDday(p.deadline); return `- ${p.name}: ${p.progress}%, ${d >= 0 ? `D-${d}` : `D+${Math.abs(d)}`}`; })
-    .join('\n') || '(없음)';
-  return `오늘 할 일 목록을 보고 우선순위 견해를 한국어로 3-4문장 이내, 번호 매겨 순위 포함, 일반 텍스트로 답해줘.\n\n[오늘 할 일]\n${tl}\n\n[진행 중]\n${pl}`;
+  try {
+    const d = await apiGet('action=getCategories');
+    return Array.isArray(d) && d.length > 0 ? d : null;
+  } catch { return null; }
 }
 
 // ── Shared styles ─────────────────────────────────────────────
@@ -147,48 +136,143 @@ function ghostBtn(small = false): React.CSSProperties {
 // ── TaskCard ──────────────────────────────────────────────────
 function TaskCard({ task, cats, onToggle, onUpdate, onDelete }: {
   task: Task; cats: Category[];
-  onToggle: () => void; onUpdate: (title: string, cat: string) => void; onDelete: () => void;
+  onToggle: () => void;
+  onUpdate: (title: string, cat: string, description: string) => void;
+  onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const [val, setVal] = useState(task.title);
   const [cat, setCat] = useState(task.category);
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (editing) ref.current?.focus(); }, [editing]);
+  const [desc, setDesc] = useState(task.description ?? '');
+  const titleRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { if (editing) titleRef.current?.focus(); }, [editing]);
+
+  // Reset local state when task prop changes
+  useEffect(() => {
+    setVal(task.title);
+    setCat(task.category);
+    setDesc(task.description ?? '');
+  }, [task.title, task.category, task.description]);
+
+  const openEdit = () => {
+    if (task.done) return;
+    setVal(task.title);
+    setCat(task.category);
+    setDesc(task.description ?? '');
+    setEditing(true);
+    setExpanded(true);
+  };
+
   const commit = () => {
     setEditing(false);
     const t = val.trim();
-    if (t) onUpdate(t, cat); else { setVal(task.title); setCat(task.category); }
+    if (t) onUpdate(t, cat, desc);
+    else { setVal(task.title); setCat(task.category); setDesc(task.description ?? ''); }
   };
+
+  const cancel = () => {
+    setEditing(false);
+    setVal(task.title);
+    setCat(task.category);
+    setDesc(task.description ?? '');
+  };
+
   const catObj = cats.find(c => c.key === task.category);
   const color = catObj?.color ?? '#ccc';
+  const hasDesc = (task.description ?? '').trim().length > 0;
+
   return (
-    <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px', marginBottom: 8, opacity: task.done ? 0.4 : 1, transition: 'opacity 0.2s' }}>
-      <div style={{ width: 4, height: 40, borderRadius: 4, background: color, flexShrink: 0 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        {editing ? (
-          <>
-            <input ref={ref} value={val} onChange={e => setVal(e.target.value)} onBlur={commit}
-              onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setEditing(false); setVal(task.title); setCat(task.category); } }}
-              style={{ ...inp, padding: '3px 0', border: 'none', borderBottom: '1px solid #ddd', borderRadius: 0, fontSize: 15, fontWeight: 500, marginBottom: 8 }} />
-            <select value={cat} onChange={e => setCat(e.target.value)}
-              style={{ ...inp, padding: '6px 10px', borderRadius: 8, fontSize: 12, width: 'auto' }}>
-              {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-            </select>
-          </>
-        ) : (
-          <>
-            <p onClick={() => !task.done && setEditing(true)}
-              style={{ fontFamily: font, fontSize: 15, fontWeight: 500, color: '#111', cursor: task.done ? 'default' : 'text', textDecoration: task.done ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {task.title}
-            </p>
-            <p style={{ ...lbl, marginTop: 4 }}>{catObj?.label ?? task.category}{task.deadline ? ` · ${task.deadline}` : ''}</p>
-          </>
+    <div style={{ ...card, marginBottom: 8, opacity: task.done ? 0.45 : 1, transition: 'opacity 0.2s' }}>
+      {/* Main row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px' }}>
+        <div style={{ width: 4, borderRadius: 4, background: color, flexShrink: 0, alignSelf: 'stretch', minHeight: 36 }} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p
+            onClick={openEdit}
+            style={{
+              fontFamily: font, fontSize: 15, fontWeight: 500, color: '#111',
+              cursor: task.done ? 'default' : 'pointer',
+              textDecoration: task.done ? 'line-through' : 'none',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+          >
+            {task.title}
+          </p>
+          <p style={{ ...lbl, marginTop: 3 }}>
+            {catObj?.label ?? task.category}
+            {task.deadline ? ` · ${task.deadline}` : ''}
+          </p>
+        </div>
+        {/* expand toggle if has description */}
+        {hasDesc && !editing && (
+          <button
+            onClick={() => setExpanded(v => !v)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 12, padding: '4px 6px', flexShrink: 0 }}
+          >
+            {expanded ? '▲' : '▼'}
+          </button>
         )}
+        <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e0e0e0', fontSize: 14, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+        <button
+          onClick={onToggle}
+          style={{
+            width: 26, height: 26, borderRadius: '50%',
+            border: `2px solid ${task.done ? color : '#e0e0e0'}`,
+            background: task.done ? color : 'transparent',
+            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0, padding: 0, transition: 'all 0.15s',
+          }}
+        >
+          {task.done && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
+        </button>
       </div>
-      <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 14, padding: '4px 6px', flexShrink: 0 }}>✕</button>
-      <button onClick={onToggle} style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${task.done ? color : '#e0e0e0'}`, background: task.done ? color : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, transition: 'all 0.15s' }}>
-        {task.done && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
-      </button>
+
+      {/* Description (read-only, expanded) */}
+      {hasDesc && !editing && expanded && (
+        <div style={{ padding: '0 20px 16px 38px' }}>
+          <p style={{ fontFamily: font, fontSize: 13, color: '#777', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{task.description}</p>
+        </div>
+      )}
+
+      {/* Edit form */}
+      {editing && (
+        <div style={{ padding: '0 20px 20px 38px' }} onMouseDown={e => e.stopPropagation()}>
+          <input
+            ref={titleRef}
+            value={val}
+            onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') cancel(); }}
+            style={{ ...inp, marginBottom: 10 }}
+            placeholder="할 일 제목"
+          />
+          <select
+            value={cat}
+            onChange={e => setCat(e.target.value)}
+            style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}
+          >
+            {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+          <textarea
+            value={desc}
+            onChange={e => setDesc(e.target.value)}
+            placeholder="상세 설명 (선택)..."
+            rows={3}
+            style={{
+              ...inp, resize: 'vertical', lineHeight: 1.6,
+              marginBottom: 14, minHeight: 80,
+            }}
+          />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={cancel} style={{ ...ghostBtn(true), flex: 1 }}>취소</button>
+            <button
+              onClick={commit}
+              style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 999, fontFamily: font, fontSize: 12, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}
+            >저장</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -201,20 +285,45 @@ function AddTaskModal({ cats, defaultDate, onAdd, onClose }: {
   const [title, setTitle] = useState('');
   const [cat, setCat] = useState(cats[0]?.key ?? '');
   const [deadline, setDeadline] = useState('');
+  const [desc, setDesc] = useState('');
+
   const submit = () => {
     if (!title.trim()) return;
-    onAdd({ date: defaultDate, title: title.trim(), category: cat, createdAt: new Date().toISOString(), deadline });
+    onAdd({
+      date: defaultDate,
+      title: title.trim(),
+      description: desc.trim(),
+      category: cat,
+      createdAt: new Date().toISOString(),
+      deadline,
+    });
     onClose();
   };
+
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.1)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
+      <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>할 일 추가</p>
-        <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="할 일 입력..." style={{ ...inp, marginBottom: 10 }} />
+        <input
+          autoFocus value={title}
+          onChange={e => setTitle(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && submit()}
+          placeholder="할 일 입력..."
+          style={{ ...inp, marginBottom: 10 }}
+        />
         <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
           {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
+        <textarea
+          value={desc}
+          onChange={e => setDesc(e.target.value)}
+          placeholder="상세 설명 (선택)..."
+          rows={3}
+          style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 10, minHeight: 72 }}
+        />
         <p style={{ ...lbl, marginBottom: 6 }}>마감일 (선택)</p>
         <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={{ ...inp, marginBottom: 24 }} />
         <div style={{ display: 'flex', gap: 10 }}>
@@ -235,10 +344,16 @@ function AddProjectModal({ cats, onAdd, onClose }: {
   const [progress, setProgress] = useState(0);
   const [deadline, setDeadline] = useState('');
   const ok = name.trim() && deadline;
-  const submit = () => { if (!ok) return; onAdd({ id: new Date().toISOString(), name: name.trim(), category: cat, progress, deadline, memo: '' }); onClose(); };
+  const submit = () => {
+    if (!ok) return;
+    onAdd({ id: new Date().toISOString(), name: name.trim(), category: cat, progress, deadline, memo: '' });
+    onClose();
+  };
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.1)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => e.target === e.currentTarget && onClose()}>
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => e.target === e.currentTarget && onClose()}
+    >
       <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>진행 중 추가</p>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="항목 이름..." style={{ ...inp, marginBottom: 10 }} />
@@ -247,7 +362,8 @@ function AddProjectModal({ cats, onAdd, onClose }: {
         </select>
         <div style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <p style={lbl}>진행률</p><p style={{ ...lbl, color: '#555', fontWeight: 600 }}>{progress}%</p>
+            <p style={lbl}>진행률</p>
+            <p style={{ ...lbl, color: '#555', fontWeight: 600 }}>{progress}%</p>
           </div>
           <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} style={{ width: '100%', accentColor: '#111' }} />
         </div>
@@ -277,9 +393,7 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
           <p style={{ ...ttl, fontSize: 16 }}>설정</p>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: 18 }}>✕</button>
         </div>
-
         <p style={{ ...lbl, marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.08em' }}>카테고리 관리</p>
-
         {cats.map(c => (
           <div key={c.key} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -293,17 +407,13 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
                 onChange={e => onUpdate(c.key, 'label', e.target.value)}
                 style={{ ...inp, padding: '8px 12px', fontSize: 13, flex: 1 }}
               />
-              <button onClick={() => onDelete(c.key)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 16, padding: '4px', flexShrink: 0 }}>✕</button>
+              <button onClick={() => onDelete(c.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 16, padding: '4px', flexShrink: 0 }}>✕</button>
             </div>
           </div>
         ))}
-
-        <button onClick={onAdd}
-          style={{ ...ghostBtn(true), marginTop: 4, marginBottom: 24, textAlign: 'center' as const, width: '100%', padding: '10px' }}>
+        <button onClick={onAdd} style={{ ...ghostBtn(true), marginTop: 4, marginBottom: 24, textAlign: 'center' as const, width: '100%', padding: '10px' }}>
           + 카테고리 추가
         </button>
-
         <div style={{ flex: 1 }} />
         <p style={{ ...lbl, fontSize: 10, textAlign: 'center' as const, lineHeight: 1.6 }}>
           카테고리는 로컬 및 Sheets에 자동 저장됩니다
@@ -334,7 +444,7 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
 
   return (
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#f8f8f6', borderTop: '1px solid #ebebeb' }}>
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '10px 20px 16px' }}>
+      <div style={{ padding: '10px 4vw 16px' }}>
         <p style={{ ...lbl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           {MONTH_NAMES[month]} {year}
         </p>
@@ -354,7 +464,6 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
               <button key={day} onClick={() => onDayClick(new Date(year, month, day))}
                 title={`${month+1}/${day} — ${dayTasks.length}개`}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 20 }}>
-                {/* blocks */}
                 <div style={{ width: '100%', height: barH, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
                   {activeTasks.length === 0
                     ? <div style={{ width: '100%', flex: 1, background: '#ebebeb', borderRadius: 3 }} />
@@ -363,7 +472,6 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
                       ))
                   }
                 </div>
-                {/* day number */}
                 <span style={{
                   fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
                   color: isSel ? '#111' : isToday ? '#555' : '#ccc',
@@ -390,9 +498,6 @@ export default function DashboardPage() {
   const [cats, setCats] = useState<Category[]>(DEFAULT_CATEGORIES);
   const [goal, setGoal] = useState('');
   const [goalEditing, setGoalEditing] = useState(false);
-  const [aiResult, setAiResult] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiTime, setAiTime] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
@@ -408,16 +513,13 @@ export default function DashboardPage() {
   // Init: load local data instantly, then sync from Sheets
   useEffect(() => {
     if (!authed) return;
-    // Categories
     const localCats = loadCategories();
     setCats(localCats); applyCSS(localCats);
     fetchCategoriesRemote().then(remote => {
       if (remote) { setCats(remote); applyCSS(remote); saveCategories(remote); }
     });
-    // Projects
     setProjects(loadProjects());
     fetchProjectsRemote().then(remote => { if (remote) { setProjects(remote); saveProjects(remote); } });
-    // Goal
     const today = new Date(); setSel(today);
     setGoal(localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '');
   }, [authed]);
@@ -426,8 +528,7 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!authed) return;
     const selYMD = toYMD(sel);
-    setTasks(loadTasks(selYMD)); // instant
-    setAiResult(''); setAiTime('');
+    setTasks(loadTasks(selYMD));
     fetchTasksRemote(selYMD).then(remote => {
       if (remote) { setTasks(remote); saveTasks(selYMD, remote); }
     });
@@ -465,20 +566,32 @@ export default function DashboardPage() {
 
   // Task handlers
   const handleToggle = async (task: Task) => {
-    setTasks(prev => { const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done: !t.done } : t); saveTasks(toYMD(sel), u); return u; });
+    setTasks(prev => {
+      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done: !t.done } : t);
+      saveTasks(toYMD(sel), u); return u;
+    });
     await apiPost({ action: 'updateTask', createdAt: task.createdAt, done: !task.done });
   };
-  const handleUpdate = async (task: Task, title: string, category: string) => {
-    setTasks(prev => { const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category } : t); saveTasks(toYMD(sel), u); return u; });
-    await apiPost({ action: 'updateTask', createdAt: task.createdAt, title, category });
+  const handleUpdate = async (task: Task, title: string, category: string, description: string) => {
+    setTasks(prev => {
+      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category, description } : t);
+      saveTasks(toYMD(sel), u); return u;
+    });
+    await apiPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description });
   };
   const handleDelete = async (task: Task) => {
-    setTasks(prev => { const u = prev.filter(t => t.createdAt !== task.createdAt); saveTasks(toYMD(sel), u); return u; });
+    setTasks(prev => {
+      const u = prev.filter(t => t.createdAt !== task.createdAt);
+      saveTasks(toYMD(sel), u); return u;
+    });
     await apiPost({ action: 'deleteTask', createdAt: task.createdAt });
   };
   const handleAdd = async (newTask: Omit<Task, 'done'>) => {
     const task: Task = { ...newTask, done: false };
-    setTasks(prev => { const u = [...prev, task]; saveTasks(newTask.date, u); return u; });
+    setTasks(prev => {
+      const u = [...prev, task];
+      saveTasks(newTask.date, u); return u;
+    });
     await apiPost({ action: 'addTask', ...task });
   };
 
@@ -492,22 +605,10 @@ export default function DashboardPage() {
     await apiPost({ action: 'deleteProject', id });
   };
 
-  // AI
-  const handleAI = async () => {
-    setAiLoading(true); setAiResult('');
-    try {
-      const prompt = buildPrompt(tasks, projects, cats);
-      const text = await callAI(prompt);
-      setAiResult(text);
-      setAiTime(new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }));
-    } catch (e: any) {
-      setAiResult(`분석 오류: ${e?.message ?? '알 수 없는 오류'}`);
-    } finally {
-      setAiLoading(false);
-    }
+  const saveGoal = () => {
+    localStorage.setItem(`${GOAL_KEY}_${toYMD(new Date())}`, goal);
+    setGoalEditing(false);
   };
-
-  const saveGoal = () => { localStorage.setItem(`${GOAL_KEY}_${toYMD(new Date())}`, goal); setGoalEditing(false); };
   const logout = () => { sessionStorage.removeItem(SESSION_KEY); window.location.replace('/'); };
 
   if (!ready || !authed) return null;
@@ -522,8 +623,8 @@ export default function DashboardPage() {
         *{box-sizing:border-box;margin:0;padding:0;}
         body{background:#f8f8f6;}
         ::-webkit-scrollbar{width:0;height:0;}
-        input,select{color:#111 !important;background:#fff;}
-        input::placeholder{color:#ccc !important;}
+        input,select,textarea{color:#111 !important;background:#fff;font-family:${font};}
+        input::placeholder,textarea::placeholder{color:#ccc !important;}
         input[type="color"]{-webkit-appearance:none;appearance:none;}
         input[type="color"]::-webkit-color-swatch-wrapper{padding:0;}
         input[type="color"]::-webkit-color-swatch{border:none;border-radius:50%;}
@@ -531,21 +632,24 @@ export default function DashboardPage() {
       `}</style>
 
       <main style={{ background: '#f8f8f6', minHeight: '100vh', fontFamily: font, paddingBottom: 140 }}>
-        <div style={{ maxWidth: 720, margin: '0 auto', padding: '56px 48px 0' }}>
+        <div style={{ padding: '48px 6vw 0' }}>
 
           {/* Header */}
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 11, color: '#ccc', letterSpacing: '0.14em', textTransform: 'uppercase' }}>filum</span>
-                <div style={{ width: 6, height: 6, borderRadius: '50%', background: SCRIPT_URL ? '#22c55e' : '#eab308' }} title={SCRIPT_URL ? 'Sheets 연결됨' : '로컬 저장 중'} />
+                <div
+                  style={{ width: 6, height: 6, borderRadius: '50%', background: SCRIPT_URL ? '#22c55e' : '#eab308' }}
+                  title={SCRIPT_URL ? 'Sheets 연결됨' : '로컬 저장 중'}
+                />
               </div>
-              <h1 style={{ fontSize: 'clamp(38px,5vw,56px)', fontWeight: 800, color: '#111', lineHeight: 1.02, letterSpacing: '-0.03em', fontFamily: font }}>
+              <h1 style={{ fontSize: 'clamp(38px,5vw,64px)', fontWeight: 800, color: '#111', lineHeight: 1.02, letterSpacing: '-0.03em', fontFamily: font }}>
                 {DAY_NAMES[sel.getDay()]}, {sel.getDate()}
               </h1>
-              <p style={{ fontSize: 18, fontWeight: 300, color: '#999', marginTop: 6, fontFamily: font }}>
+              <p style={{ fontSize: 20, fontWeight: 300, color: '#999', marginTop: 6, fontFamily: font }}>
                 {MONTH_NAMES[sel.getMonth()]} {sel.getFullYear()}
-                {selYMD !== todayYMD && <span style={{ fontSize: 12, color: '#ccc', marginLeft: 10 }}>오늘이 아님</span>}
+                {selYMD !== todayYMD && <span style={{ fontSize: 13, color: '#ccc', marginLeft: 12 }}>오늘이 아님</span>}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 10, paddingTop: 8 }}>
@@ -584,29 +688,10 @@ export default function DashboardPage() {
               : tasks.map(t => (
                   <TaskCard key={t.createdAt} task={t} cats={cats}
                     onToggle={() => handleToggle(t)}
-                    onUpdate={(title, cat) => handleUpdate(t, title, cat)}
+                    onUpdate={(title, cat, description) => handleUpdate(t, title, cat, description)}
                     onDelete={() => handleDelete(t)} />
                 ))
             }
-          </section>
-
-          <div style={{ height: 1, background: '#ebebeb', marginBottom: 44 }} />
-
-          {/* AI */}
-          <section style={{ marginBottom: 48 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: aiResult ? 20 : 0 }}>
-              <h2 style={{ ...ttl, fontSize: 16 }}>AI 우선순위 분석</h2>
-              <button onClick={handleAI} disabled={aiLoading}
-                style={{ ...ghostBtn(), background: aiLoading ? '#f5f5f5' : '#111', color: aiLoading ? '#aaa' : '#fff', border: 'none', fontWeight: 600 }}>
-                {aiLoading ? '분석 중...' : '분석하기'}
-              </button>
-            </div>
-            {aiResult && (
-              <div style={{ ...card, padding: '24px 28px', marginTop: 20 }}>
-                <p style={{ fontFamily: font, fontSize: 14, color: '#333', lineHeight: 1.85, whiteSpace: 'pre-wrap' }}>{aiResult}</p>
-                {aiTime && <p style={{ ...lbl, marginTop: 14, textAlign: 'right' as const }}>마지막 분석: {aiTime}</p>}
-              </div>
-            )}
           </section>
 
           <div style={{ height: 1, background: '#ebebeb', marginBottom: 44 }} />

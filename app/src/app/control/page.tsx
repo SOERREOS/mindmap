@@ -140,91 +140,74 @@ function ghostBtn(small = false): React.CSSProperties {
   };
 }
 
-// ── TaskCard ──────────────────────────────────────────────────
-function TaskCard({ task, cats, onToggle, onUpdate, onDelete }: {
+// ── TaskCard (compact grid) ───────────────────────────────────
+function TaskCard({ task, cats, onToggle, onEdit, onDelete }: {
   task: Task; cats: Category[];
-  onToggle: () => void;
-  onUpdate: (title: string, cat: string, description: string) => void;
-  onDelete: () => void;
+  onToggle: () => void; onEdit: () => void; onDelete: () => void;
 }) {
-  const [editing, setEditing] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const catObj = cats.find(c => c.key === task.category);
+  const color = catObj?.color ?? '#ccc';
+  return (
+    <div onClick={() => !task.done && onEdit()}
+      style={{ ...card, padding: '14px 14px 12px', opacity: task.done ? 0.45 : 1, transition: 'opacity 0.2s', cursor: task.done ? 'default' : 'pointer', display: 'flex', flexDirection: 'column', minHeight: 110, position: 'relative', overflow: 'hidden' }}>
+      {/* top color bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
+      {/* title */}
+      <p style={{ fontFamily: font, fontSize: 14, fontWeight: 500, color: '#111', marginTop: 6, marginBottom: 6, lineHeight: 1.4,
+        display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        textDecoration: task.done ? 'line-through' : 'none', flex: 1 }}>
+        {task.title}
+      </p>
+      <p style={{ ...lbl, marginBottom: 10, fontSize: 11 }}>
+        {catObj?.label ?? task.category}{task.deadline ? ` · ${task.deadline.slice(5)}` : ''}
+      </p>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button onClick={e => { e.stopPropagation(); onDelete(); }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 13, padding: 0, lineHeight: 1 }}>✕</button>
+        <button onClick={e => { e.stopPropagation(); onToggle(); }}
+          style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${task.done ? color : '#e0e0e0'}`,
+            background: task.done ? color : 'transparent', cursor: 'pointer', display: 'flex',
+            alignItems: 'center', justifyContent: 'center', padding: 0, transition: 'all 0.15s', flexShrink: 0 }}>
+          {task.done && <span style={{ color: '#fff', fontSize: 9, fontWeight: 700 }}>✓</span>}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── EditTaskModal ─────────────────────────────────────────────
+function EditTaskModal({ task, cats, onUpdate, onClose }: {
+  task: Task; cats: Category[];
+  onUpdate: (title: string, cat: string, description: string) => void;
+  onClose: () => void;
+}) {
   const [val, setVal] = useState(task.title);
   const [cat, setCat] = useState(task.category);
   const [desc, setDesc] = useState(task.description ?? '');
-  const titleRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => { if (editing) titleRef.current?.focus(); }, [editing]);
-  useEffect(() => {
-    setVal(task.title); setCat(task.category); setDesc(task.description ?? '');
-  }, [task.title, task.category, task.description]);
-
-  const openEdit = () => {
-    if (task.done) return;
-    setVal(task.title); setCat(task.category); setDesc(task.description ?? '');
-    setEditing(true); setExpanded(true);
-  };
   const commit = () => {
-    setEditing(false);
     const t = val.trim();
     if (t) onUpdate(t, cat, desc);
-    else { setVal(task.title); setCat(task.category); setDesc(task.description ?? ''); }
+    onClose();
   };
-  const cancel = () => {
-    setEditing(false);
-    setVal(task.title); setCat(task.category); setDesc(task.description ?? '');
-  };
-
-  const catObj = cats.find(c => c.key === task.category);
-  const color = catObj?.color ?? '#ccc';
-  const hasDesc = (task.description ?? '').trim().length > 0;
-
   return (
-    <div style={{ ...card, marginBottom: 8, opacity: task.done ? 0.45 : 1, transition: 'opacity 0.2s' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px' }}>
-        <div style={{ width: 4, borderRadius: 4, background: color, flexShrink: 0, alignSelf: 'stretch', minHeight: 36 }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <p onClick={openEdit} style={{ fontFamily: font, fontSize: 15, fontWeight: 500, color: '#111', cursor: task.done ? 'default' : 'pointer', textDecoration: task.done ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {task.title}
-          </p>
-          <p style={{ ...lbl, marginTop: 3 }}>
-            {catObj?.label ?? task.category}{task.deadline ? ` · ${task.deadline}` : ''}
-          </p>
+    <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', width: 380, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+        <p style={{ ...ttl, fontSize: 16, marginBottom: 16 }}>할 일 수정</p>
+        <input autoFocus value={val} onChange={e => setVal(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onClose(); }}
+          style={{ ...inp, marginBottom: 10 }} placeholder="할 일 제목" />
+        <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
+          {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+        </select>
+        <textarea value={desc} onChange={e => setDesc(e.target.value)}
+          placeholder="상세 설명 (선택)..." rows={3}
+          style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 18, minHeight: 72 }} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: '11px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 13, cursor: 'pointer', background: '#fafafa', color: '#888' }}>취소</button>
+          <button onClick={commit} style={{ flex: 1, padding: '11px', border: 'none', borderRadius: 12, fontFamily: font, fontSize: 13, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}>저장</button>
         </div>
-        {hasDesc && !editing && (
-          <button onClick={() => setExpanded(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 12, padding: '4px 6px', flexShrink: 0 }}>
-            {expanded ? '▲' : '▼'}
-          </button>
-        )}
-        <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e0e0e0', fontSize: 14, padding: '4px 6px', flexShrink: 0 }}>✕</button>
-        <button onClick={onToggle} style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${task.done ? color : '#e0e0e0'}`, background: task.done ? color : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, transition: 'all 0.15s' }}>
-          {task.done && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
-        </button>
       </div>
-
-      {hasDesc && !editing && expanded && (
-        <div style={{ padding: '0 20px 16px 38px' }}>
-          <p style={{ fontFamily: font, fontSize: 13, color: '#777', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{task.description}</p>
-        </div>
-      )}
-
-      {editing && (
-        <div style={{ padding: '0 20px 20px 38px' }}>
-          <input ref={titleRef} value={val} onChange={e => setVal(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Escape') cancel(); }}
-            style={{ ...inp, marginBottom: 10 }} placeholder="할 일 제목" />
-          <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
-            {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-          </select>
-          <textarea value={desc} onChange={e => setDesc(e.target.value)}
-            placeholder="상세 설명 (선택)..." rows={3}
-            style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 14, minHeight: 80 }} />
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={cancel} style={{ ...ghostBtn(true), flex: 1 }}>취소</button>
-            <button onClick={commit} style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 999, fontFamily: font, fontSize: 12, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}>저장</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -445,6 +428,7 @@ export default function DashboardPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
   // Sync status: idle | syncing | ok | fail
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'fail'>('idle');
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -619,6 +603,7 @@ export default function DashboardPage() {
         .dash-pad{padding:48px 6vw 0;}
         .dash-day-btn{flex:1;}
         .dash-month-scroll{display:flex;gap:2px;align-items:flex-end;}
+        .dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
         @media(max-width:640px){
           .dash-pad{padding:28px 5vw 0 !important;}
           .dash-sheet-overlay{align-items:flex-end !important;}
@@ -626,6 +611,7 @@ export default function DashboardPage() {
           .dash-settings{width:100vw !important;}
           .dash-month-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
           .dash-day-btn{flex:none !important;min-width:34px;}
+          .dash-grid{grid-template-columns:repeat(2,1fr);}
         }
       `}</style>
 
@@ -684,12 +670,14 @@ export default function DashboardPage() {
                   <p style={{ ...lbl, marginBottom: 14 }}>할 일이 없습니다</p>
                   <button onClick={() => setShowAddTask(true)} style={ghostBtn()}>+ 할 일 추가</button>
                 </div>
-              : tasks.map(t => (
-                  <TaskCard key={t.createdAt} task={t} cats={cats}
-                    onToggle={() => handleToggle(t)}
-                    onUpdate={(title, cat, description) => handleUpdate(t, title, cat, description)}
-                    onDelete={() => handleDelete(t)} />
-                ))
+              : <div className="dash-grid">
+                  {tasks.map(t => (
+                    <TaskCard key={t.createdAt} task={t} cats={cats}
+                      onToggle={() => handleToggle(t)}
+                      onEdit={() => setEditingTask(t)}
+                      onDelete={() => handleDelete(t)} />
+                  ))}
+                </div>
             }
           </section>
 
@@ -706,33 +694,36 @@ export default function DashboardPage() {
                   <p style={{ ...lbl, marginBottom: 14 }}>진행 중인 항목이 없습니다</p>
                   <button onClick={() => setShowAddProject(true)} style={ghostBtn()}>+ 추가</button>
                 </div>
-              : projects.map(p => {
-                  const dday = getDday(p.deadline);
-                  const catObj = cats.find(c => c.key === p.category);
-                  const color = catObj?.color ?? '#888';
-                  return (
-                    <div key={p.id} style={{ ...card, padding: '20px 24px', marginBottom: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                        <div>
-                          <p style={{ fontFamily: font, fontSize: 15, fontWeight: 600, color: '#111' }}>{p.name}</p>
-                          <p style={{ ...lbl, marginTop: 4 }}>{catObj?.label ?? p.category}</p>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                          <p style={{ fontFamily: font, fontSize: 13, fontWeight: 700, color: dday >= 0 && dday <= 7 ? '#ef4444' : '#aaa', fontVariantNumeric: 'tabular-nums' }}>
+              : <div className="dash-grid">
+                  {projects.map(p => {
+                    const dday = getDday(p.deadline);
+                    const catObj = cats.find(c => c.key === p.category);
+                    const color = catObj?.color ?? '#888';
+                    return (
+                      <div key={p.id} style={{ ...card, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', minHeight: 110, position: 'relative', overflow: 'hidden' }}>
+                        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: color }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginTop: 6, marginBottom: 4 }}>
+                          <p style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: '#111', lineHeight: 1.3,
+                            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1, marginRight: 6 }}>
+                            {p.name}
+                          </p>
+                          <p style={{ fontFamily: font, fontSize: 12, fontWeight: 700, color: dday >= 0 && dday <= 7 ? '#ef4444' : '#aaa', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
                             {dday >= 0 ? `D-${dday}` : `D+${Math.abs(dday)}`}
                           </p>
-                          <button onClick={() => handleDeleteProject(p.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 14 }}>✕</button>
+                        </div>
+                        <p style={{ ...lbl, fontSize: 11, marginBottom: 'auto', paddingBottom: 10 }}>{catObj?.label ?? p.category}</p>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                          <div style={{ flex: 1, height: 3, background: '#f0f0f0', borderRadius: 999 }}>
+                            <div style={{ height: '100%', width: `${p.progress}%`, background: color, borderRadius: 999, transition: 'width 0.4s' }} />
+                          </div>
+                          <span style={{ ...lbl, fontSize: 10, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>{p.progress}%</span>
+                          <button onClick={() => handleDeleteProject(p.id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }}>✕</button>
                         </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ flex: 1, height: 4, background: '#f0f0f0', borderRadius: 999 }}>
-                          <div style={{ height: '100%', width: `${p.progress}%`, background: color, borderRadius: 999, transition: 'width 0.4s' }} />
-                        </div>
-                        <span style={{ ...lbl, width: 36, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' }}>{p.progress}%</span>
-                      </div>
-                    </div>
-                  );
-                })
+                    );
+                  })}
+                </div>
             }
           </section>
         </div>
@@ -743,6 +734,11 @@ export default function DashboardPage() {
       {showSettings && <SettingsPanel cats={cats} onUpdate={handleCatUpdate} onAdd={handleCatAdd} onDelete={handleCatDelete} onClose={() => setShowSettings(false)} />}
       {showAddTask && <AddTaskModal cats={cats} defaultDate={selYMD} onAdd={handleAdd} onClose={() => setShowAddTask(false)} />}
       {showAddProject && <AddProjectModal cats={cats} onAdd={handleAddProject} onClose={() => setShowAddProject(false)} />}
+      {editingTask && (
+        <EditTaskModal task={editingTask} cats={cats}
+          onUpdate={(title, cat, description) => { handleUpdate(editingTask, title, cat, description); setEditingTask(null); }}
+          onClose={() => setEditingTask(null)} />
+      )}
     </>
   );
 }

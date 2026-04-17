@@ -84,21 +84,46 @@ function applyCSSVariables(colors: Record<CategoryKey, { label: string; color: s
   });
 }
 
-// ── API ───────────────────────────────────────────────────────
-async function fetchTasks(date: string): Promise<Task[]> {
-  if (!SCRIPT_URL) return [];
+// ── Local Storage Task Persistence ────────────────────────────
+const TASKS_STORAGE_KEY = 'dashboard_tasks';
+const PROJECTS_STORAGE_KEY = 'dashboard_projects';
+
+function loadLocalTasks(date: string): Task[] {
   try {
-    const res = await fetch(`${SCRIPT_URL}?action=getTasks&date=${date}`);
-    return res.json();
+    const all = JSON.parse(localStorage.getItem(TASKS_STORAGE_KEY) ?? '{}');
+    return all[date] ?? [];
   } catch { return []; }
 }
 
+function saveLocalTasks(date: string, tasks: Task[]) {
+  try {
+    const all = JSON.parse(localStorage.getItem(TASKS_STORAGE_KEY) ?? '{}');
+    all[date] = tasks;
+    localStorage.setItem(TASKS_STORAGE_KEY, JSON.stringify(all));
+  } catch { /* ignore */ }
+}
+
+function loadLocalProjects(): Project[] {
+  try {
+    return JSON.parse(localStorage.getItem(PROJECTS_STORAGE_KEY) ?? '[]');
+  } catch { return []; }
+}
+
+// ── API ───────────────────────────────────────────────────────
+async function fetchTasks(date: string): Promise<Task[]> {
+  if (!SCRIPT_URL) return loadLocalTasks(date);
+  try {
+    const res = await fetch(`${SCRIPT_URL}?action=getTasks&date=${date}`);
+    return res.json();
+  } catch { return loadLocalTasks(date); }
+}
+
 async function fetchProjects(): Promise<Project[]> {
-  if (!SCRIPT_URL) return [];
+  if (!SCRIPT_URL) return loadLocalProjects();
   try {
     const res = await fetch(`${SCRIPT_URL}?action=getProjects`);
     return res.json();
-  } catch { return []; }
+  } catch { return loadLocalProjects(); }
 }
 
 async function apiPost(body: object) {
@@ -462,23 +487,39 @@ export default function DashboardPage() {
   };
 
   const handleToggle = async (task: Task) => {
-    setTasks(prev => prev.map(t => t.createdAt === task.createdAt ? { ...t, done: !t.done } : t));
+    setTasks(prev => {
+      const updated = prev.map(t => t.createdAt === task.createdAt ? { ...t, done: !t.done } : t);
+      saveLocalTasks(toYMD(selectedDate), updated);
+      return updated;
+    });
     await apiPost({ action: 'updateTask', createdAt: task.createdAt, done: !task.done });
   };
 
   const handleUpdate = async (task: Task, title: string) => {
-    setTasks(prev => prev.map(t => t.createdAt === task.createdAt ? { ...t, title } : t));
+    setTasks(prev => {
+      const updated = prev.map(t => t.createdAt === task.createdAt ? { ...t, title } : t);
+      saveLocalTasks(toYMD(selectedDate), updated);
+      return updated;
+    });
     await apiPost({ action: 'updateTask', createdAt: task.createdAt, title });
   };
 
   const handleDelete = async (task: Task) => {
-    setTasks(prev => prev.filter(t => t.createdAt !== task.createdAt));
+    setTasks(prev => {
+      const updated = prev.filter(t => t.createdAt !== task.createdAt);
+      saveLocalTasks(toYMD(selectedDate), updated);
+      return updated;
+    });
     await apiPost({ action: 'deleteTask', createdAt: task.createdAt });
   };
 
   const handleAdd = async (newTask: Omit<Task, 'done'>) => {
     const task: Task = { ...newTask, done: false };
-    setTasks(prev => [...prev, task]);
+    setTasks(prev => {
+      const updated = [...prev, task];
+      saveLocalTasks(newTask.date, updated);
+      return updated;
+    });
     await apiPost({ action: 'addTask', ...task });
   };
 

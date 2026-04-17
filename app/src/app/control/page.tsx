@@ -134,20 +134,20 @@ async function fetchCategoriesRemote(): Promise<Category[] | null> {
 }
 
 // ── Shared styles ─────────────────────────────────────────────
-const card: React.CSSProperties = { background: '#fff', borderRadius: 16, border: '1px solid #ebebeb' };
-const lbl: React.CSSProperties = { fontFamily: font, fontSize: 12, color: '#aaa', letterSpacing: '0.03em' };
-const ttl: React.CSSProperties = { fontFamily: font, fontSize: 15, fontWeight: 600, color: '#111' };
+const card: React.CSSProperties = { background: 'var(--surface)', borderRadius: 16, border: '1px solid var(--border)' };
+const lbl: React.CSSProperties = { fontFamily: font, fontSize: 12, color: 'var(--muted)', letterSpacing: '0.03em' };
+const ttl: React.CSSProperties = { fontFamily: font, fontSize: 15, fontWeight: 600, color: 'var(--text)' };
 const inp: React.CSSProperties = {
-  border: '1px solid #e5e5e5', borderRadius: 12, padding: '12px 16px',
+  border: '1px solid var(--input-border)', borderRadius: 12, padding: '12px 16px',
   fontFamily: font, fontSize: 14, outline: 'none', width: '100%',
-  boxSizing: 'border-box', color: '#111', background: '#fff',
+  boxSizing: 'border-box', color: 'var(--text)', background: 'var(--input-bg)',
 };
 function ghostBtn(small = false): React.CSSProperties {
   return {
-    background: 'none', border: '1px solid #e5e5e5', borderRadius: 999,
+    background: 'none', border: '1px solid var(--border)', borderRadius: 999,
     padding: small ? '6px 14px' : '9px 20px',
     cursor: 'pointer', fontFamily: font,
-    fontSize: small ? 12 : 13, color: '#666',
+    fontSize: small ? 12 : 13, color: 'var(--muted)',
   };
 }
 
@@ -165,7 +165,7 @@ function TaskCard({ task, cats, onToggle, onEdit, onDelete }: {
         opacity: task.done ? 0.5 : 1, transition: 'opacity 0.2s',
         cursor: task.done ? 'default' : 'pointer',
         display: 'flex', flexDirection: 'column', minHeight: 110 }}>
-      <p style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: '#fff', marginBottom: 6, lineHeight: 1.4,
+      <p style={{ fontFamily: font, fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 6, lineHeight: 1.35,
         display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
         textDecoration: task.done ? 'line-through' : 'none', flex: 1 }}>
         {task.title}
@@ -211,7 +211,7 @@ function EditTaskModal({ task, cats, onUpdate, onClose }: {
   return (
     <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '28px 24px', width: 380, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+      <div className="dash-sheet-box" style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', width: 380, boxShadow: '0 12px 48px rgba(0,0,0,0.18)' }}>
         <p style={{ ...ttl, fontSize: 16, marginBottom: 16 }}>할 일 수정</p>
         <input autoFocus value={val} onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onClose(); }}
@@ -223,7 +223,7 @@ function EditTaskModal({ task, cats, onUpdate, onClose }: {
           placeholder="상세 설명 (선택)..." rows={3}
           style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 18, minHeight: 72 }} />
         <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '11px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 13, cursor: 'pointer', background: '#fafafa', color: '#888' }}>취소</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '11px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 13, cursor: 'pointer', background: 'var(--cancel-bg)', color: 'var(--cancel-col)' }}>취소</button>
           <button onClick={commit} style={{ flex: 1, padding: '11px', border: 'none', borderRadius: 12, fontFamily: font, fontSize: 13, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}>저장</button>
         </div>
       </div>
@@ -260,11 +260,11 @@ function AddTaskModal({ cats, defaultDate, onAdd, onClose }: {
   return (
     <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+      <div className="dash-sheet-box" style={{ background: 'var(--surface)', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.18)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 16 }}>할 일 추가</p>
 
         {/* 당일 / 기간 토글 */}
-        <div style={{ display: 'flex', background: '#f5f5f5', borderRadius: 12, padding: 4, marginBottom: 16 }}>
+        <div style={{ display: 'flex', background: 'var(--tab-bg)', borderRadius: 12, padding: 4, marginBottom: 16 }}>
           <button style={tabBtn(!rangeMode)} onClick={() => setRangeMode(false)}>당일</button>
           <button style={tabBtn(rangeMode)} onClick={() => setRangeMode(true)}>기간 설정</button>
         </div>
@@ -292,7 +292,7 @@ function AddTaskModal({ cats, defaultDate, onAdd, onClose }: {
           style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 20, minHeight: 60 }} />
 
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '13px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: '#fafafa', color: '#888' }}>취소</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '13px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: 'var(--cancel-bg)', color: 'var(--cancel-col)' }}>취소</button>
           <button onClick={submit} style={{ flex: 1, padding: '13px', border: 'none', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}>추가</button>
         </div>
       </div>
@@ -317,7 +317,7 @@ function AddProjectModal({ cats, onAdd, onClose }: {
   return (
     <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dash-sheet-box" style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
+      <div className="dash-sheet-box" style={{ background: 'var(--surface)', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.18)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>진행 중 추가</p>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="항목 이름..." style={{ ...inp, marginBottom: 10 }} />
         <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
@@ -332,7 +332,7 @@ function AddProjectModal({ cats, onAdd, onClose }: {
         <p style={{ ...lbl, marginBottom: 6 }}>마감일</p>
         <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={{ ...inp, marginBottom: 24 }} />
         <div style={{ display: 'flex', gap: 10 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '13px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: '#fafafa', color: '#888' }}>취소</button>
+          <button onClick={onClose} style={{ flex: 1, padding: '13px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: 'var(--cancel-bg)', color: 'var(--cancel-col)' }}>취소</button>
           <button onClick={submit} disabled={!ok} style={{ flex: 1, padding: '13px', border: 'none', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: ok ? 'pointer' : 'default', background: ok ? '#111' : '#e5e5e5', color: ok ? '#fff' : '#aaa', fontWeight: 600 }}>추가</button>
         </div>
       </div>
@@ -341,8 +341,8 @@ function AddProjectModal({ cats, onAdd, onClose }: {
 }
 
 // ── SettingsPanel ─────────────────────────────────────────────
-function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
-  cats: Category[];
+function SettingsPanel({ cats, darkMode, onToggleDark, onUpdate, onAdd, onDelete, onClose }: {
+  cats: Category[]; darkMode: boolean; onToggleDark: () => void;
   onUpdate: (key: string, field: 'label' | 'color', val: string) => void;
   onAdd: () => void; onDelete: (key: string) => void; onClose: () => void;
 }) {
@@ -365,14 +365,28 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
 
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dash-settings" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: '#fff', borderLeft: '1px solid #ebebeb', padding: '36px 24px', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,0.07)', overflowY: 'auto' }}>
+      <div className="dash-settings" style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: 'var(--surface)', borderLeft: '1px solid var(--border)', padding: '36px 24px', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,0.12)', overflowY: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
           <p style={{ ...ttl, fontSize: 16 }}>설정</p>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: 18 }}>✕</button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 18 }}>✕</button>
+        </div>
+
+        {/* Dark mode toggle */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28, padding: '14px 16px', background: 'var(--bg)', borderRadius: 12 }}>
+          <p style={{ ...lbl, textTransform: 'uppercase', letterSpacing: '0.08em' }}>다크 모드</p>
+          <button onClick={onToggleDark} style={{
+            width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+            background: darkMode ? '#22c55e' : 'var(--border)', position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+          }}>
+            <div style={{
+              width: 18, height: 18, borderRadius: '50%', background: '#fff',
+              position: 'absolute', top: 3, left: darkMode ? 23 : 3, transition: 'left 0.2s',
+            }} />
+          </button>
         </div>
 
         {/* Connection test */}
-        <div style={{ marginBottom: 28, padding: '16px', background: '#f8f8f6', borderRadius: 12 }}>
+        <div style={{ marginBottom: 28, padding: '16px', background: 'var(--bg)', borderRadius: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: pingResult ? 10 : 0 }}>
             <p style={{ ...lbl, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sheets 연결</p>
             <button onClick={doPing} disabled={pinging} style={{ ...ghostBtn(true), fontSize: 11 }}>
@@ -389,10 +403,10 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
           <div key={c.key} style={{ marginBottom: 14 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input type="color" value={c.color} onChange={e => onUpdate(c.key, 'color', e.target.value)}
-                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e5e5e5', cursor: 'pointer', padding: 2, flexShrink: 0 }} />
+                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid var(--border)', cursor: 'pointer', padding: 2, flexShrink: 0 }} />
               <input value={c.label} onChange={e => onUpdate(c.key, 'label', e.target.value)}
                 style={{ ...inp, padding: '8px 12px', fontSize: 13, flex: 1 }} />
-              <button onClick={() => onDelete(c.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 16, padding: '4px', flexShrink: 0 }}>✕</button>
+              <button onClick={() => onDelete(c.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)', fontSize: 16, padding: '4px', flexShrink: 0 }}>✕</button>
             </div>
           </div>
         ))}
@@ -431,7 +445,7 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
   }, [selectedYMD]);
 
   return (
-    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#f8f8f6', borderTop: '1px solid #ebebeb', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: 'var(--bg)', borderTop: '1px solid var(--border)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div style={{ padding: '10px 4vw 16px' }}>
         <p style={{ ...lbl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{MONTH_NAMES[month]} {year}</p>
         <div ref={scrollRef} className="dash-month-scroll">
@@ -450,13 +464,13 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick }: {
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 20 }}>
                 <div style={{ width: '100%', height: barH, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
                   {activeTasks.length === 0
-                    ? <div style={{ width: '100%', flex: 1, background: '#ebebeb', borderRadius: 3 }} />
+                    ? <div style={{ width: '100%', flex: 1, background: 'var(--border)', borderRadius: 3 }} />
                     : activeTasks.slice(0, 8).map((t, ti) => (
                         <div key={ti} style={{ width: '100%', flex: 1, background: catMap[t.category] ?? '#ccc', minHeight: 3, borderRadius: 1 }} />
                       ))
                   }
                 </div>
-                <span style={{ fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: isSel ? '#111' : isToday ? '#555' : '#ccc', fontWeight: isSel || isToday ? 700 : 400, borderBottom: isSel ? '1.5px solid #111' : '1.5px solid transparent', paddingBottom: 1 }}>{day}</span>
+                <span style={{ fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: isSel ? 'var(--text)' : isToday ? 'var(--text-sub)' : 'var(--border)', fontWeight: isSel || isToday ? 700 : 400, borderBottom: isSel ? '1.5px solid var(--text)' : '1.5px solid transparent', paddingBottom: 1 }}>{day}</span>
               </button>
             );
           })}
@@ -481,6 +495,10 @@ export default function DashboardPage() {
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem('dashboard_dark') === '1'; } catch { return false; }
+  });
+  const [now, setNow] = useState(new Date());
   // Sync status: idle | syncing | ok | fail
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'fail'>('idle');
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -500,6 +518,18 @@ export default function DashboardPage() {
       setSyncAndReset('fail');
     }
   };
+
+  // Dark mode
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    try { localStorage.setItem('dashboard_dark', darkMode ? '1' : '0'); } catch {}
+  }, [darkMode]);
+
+  // Clock
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   // Auth
   useEffect(() => {
@@ -641,15 +671,27 @@ export default function DashboardPage() {
     <>
       <style>{`
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
+        :root{
+          --bg:#f8f8f6;--surface:#ffffff;--border:#ebebeb;
+          --text:#111111;--text-sub:#999999;--muted:#aaaaaa;
+          --input-bg:#ffffff;--input-border:#e5e5e5;
+          --cancel-bg:#fafafa;--cancel-col:#888888;--tab-bg:#f0f0f0;
+        }
+        html.dark{
+          --bg:#141414;--surface:#1e1e1e;--border:#2a2a2a;
+          --text:#efefef;--text-sub:#888888;--muted:#606060;
+          --input-bg:#252525;--input-border:#333333;
+          --cancel-bg:#252525;--cancel-col:#888888;--tab-bg:#252525;
+        }
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{background:#f8f8f6;}
+        body{background:var(--bg);transition:background 0.2s;}
         ::-webkit-scrollbar{width:0;height:0;}
-        input,select,textarea{color:#111 !important;background:#fff;font-family:${font};}
-        input::placeholder,textarea::placeholder{color:#ccc !important;}
+        input,select,textarea{color:var(--text) !important;background:var(--input-bg) !important;font-family:${font};}
+        input::placeholder,textarea::placeholder{color:var(--muted) !important;}
         input[type="color"]{-webkit-appearance:none;appearance:none;}
         input[type="color"]::-webkit-color-swatch-wrapper{padding:0;}
         input[type="color"]::-webkit-color-swatch{border:none;border-radius:50%;}
-        input[type="range"]{accent-color:#111;}
+        input[type="range"]{accent-color:var(--text);}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         .syncing{animation:pulse 1s ease-in-out infinite;}
         .dash-pad{padding:48px 6vw 0;}
@@ -667,30 +709,32 @@ export default function DashboardPage() {
         }
       `}</style>
 
-      <main style={{ background: '#f8f8f6', minHeight: '100vh', fontFamily: font, paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))' }}>
+      <main style={{ background: 'var(--bg)', minHeight: '100vh', fontFamily: font, paddingBottom: 'calc(140px + env(safe-area-inset-bottom, 0px))' }}>
         <div className="dash-pad">
 
           {/* Header */}
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 40 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <span style={{ fontSize: 11, color: '#ccc', letterSpacing: '0.14em', textTransform: 'uppercase' }}>filum</span>
                 <div
                   className={syncState === 'syncing' ? 'syncing' : ''}
-                  style={{ width: 6, height: 6, borderRadius: '50%', background: syncDot, transition: 'background 0.3s' }}
-                  title={syncState === 'syncing' ? '동기화 중...' : syncState === 'fail' ? '동기화 실패' : 'Sheets 연결됨'}
+                  style={{ width: 10, height: 10, borderRadius: '50%', background: syncDot, transition: 'background 0.3s', flexShrink: 0 }}
+                  title={syncState === 'syncing' ? '동기화 중...' : syncState === 'fail' ? '동기화 실패' : '연결됨'}
                 />
               </div>
-              <h1 style={{ fontSize: 'clamp(38px,5vw,64px)', fontWeight: 800, color: '#111', lineHeight: 1.02, letterSpacing: '-0.03em', fontFamily: font }}>
+              <h1 style={{ fontSize: 'clamp(38px,5vw,64px)', fontWeight: 800, color: 'var(--text)', lineHeight: 1.02, letterSpacing: '-0.03em', fontFamily: font }}>
                 {DAY_NAMES[sel.getDay()]}, {sel.getDate()}
+                <span style={{ fontSize: 'clamp(18px,2.2vw,28px)', fontWeight: 300, color: 'var(--muted)', marginLeft: 16, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
+                  {String(now.getHours()).padStart(2,'0')}:{String(now.getMinutes()).padStart(2,'0')}:{String(now.getSeconds()).padStart(2,'0')}
+                </span>
               </h1>
-              <p style={{ fontSize: 20, fontWeight: 300, color: '#999', marginTop: 6, fontFamily: font }}>
+              <p style={{ fontSize: 20, fontWeight: 300, color: 'var(--text-sub)', marginTop: 6, fontFamily: font }}>
                 {MONTH_NAMES[sel.getMonth()]} {sel.getFullYear()}
-                {selYMD !== todayYMD && <span style={{ fontSize: 13, color: '#ccc', marginLeft: 12 }}>오늘이 아님</span>}
+                {selYMD !== todayYMD && <span style={{ fontSize: 13, color: 'var(--muted)', marginLeft: 12 }}>오늘이 아님</span>}
               </p>
             </div>
             <div style={{ display: 'flex', gap: 10, paddingTop: 8 }}>
-              <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: '1px solid #e5e5e5', borderRadius: '50%', width: 42, height: 42, cursor: 'pointer', fontSize: 16, color: '#777', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚙</button>
+              <button onClick={() => setShowSettings(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: '50%', width: 42, height: 42, cursor: 'pointer', fontSize: 16, color: 'var(--muted)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>⚙</button>
               <button onClick={logout} style={ghostBtn()}>나가기</button>
             </div>
           </header>
@@ -700,14 +744,14 @@ export default function DashboardPage() {
             {goalEditing
               ? <input autoFocus value={goal} onChange={e => setGoal(e.target.value)} onBlur={saveGoal}
                   onKeyDown={e => e.key === 'Enter' && saveGoal()} placeholder="오늘의 목표..."
-                  style={{ background: 'transparent', border: 'none', borderBottom: '1px solid #ddd', outline: 'none', width: '100%', fontFamily: font, fontSize: 18, color: '#333', padding: '4px 0' }} />
-              : <p onClick={() => setGoalEditing(true)} style={{ fontSize: 18, color: goal ? '#333' : '#ddd', cursor: 'text', padding: '4px 0', fontFamily: font }}>
+                  style={{ background: 'transparent', border: 'none', borderBottom: '1px solid var(--border)', outline: 'none', width: '100%', fontFamily: font, fontSize: 18, color: 'var(--text)', padding: '4px 0' }} />
+              : <p onClick={() => setGoalEditing(true)} style={{ fontSize: 18, color: goal ? 'var(--text)' : 'var(--border)', cursor: 'text', padding: '4px 0', fontFamily: font }}>
                   {goal || '오늘의 목표...'}
                 </p>
             }
           </div>
 
-          <div style={{ height: 1, background: '#ebebeb', marginBottom: 44 }} />
+          <div style={{ height: 1, background: 'var(--border)', marginBottom: 44 }} />
 
           {/* Tasks */}
           <section style={{ marginBottom: 48 }}>
@@ -733,7 +777,7 @@ export default function DashboardPage() {
             }
           </section>
 
-          <div style={{ height: 1, background: '#ebebeb', marginBottom: 44 }} />
+          <div style={{ height: 1, background: 'var(--border)', marginBottom: 44 }} />
 
           {/* Projects */}
           <section>
@@ -782,7 +826,7 @@ export default function DashboardPage() {
 
       <MonthBar year={sel.getFullYear()} month={sel.getMonth()} selectedYMD={selYMD} cats={cats} allTasks={allTasks} onDayClick={setSel} />
 
-      {showSettings && <SettingsPanel cats={cats} onUpdate={handleCatUpdate} onAdd={handleCatAdd} onDelete={handleCatDelete} onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsPanel cats={cats} darkMode={darkMode} onToggleDark={() => setDarkMode(d => !d)} onUpdate={handleCatUpdate} onAdd={handleCatAdd} onDelete={handleCatDelete} onClose={() => setShowSettings(false)} />}
       {showAddTask && <AddTaskModal cats={cats} defaultDate={selYMD} onAdd={handleAdd} onClose={() => setShowAddTask(false)} />}
       {showAddProject && <AddProjectModal cats={cats} onAdd={handleAddProject} onClose={() => setShowAddProject(false)} />}
       {editingTask && (

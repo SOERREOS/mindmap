@@ -11,7 +11,10 @@ export async function GET(req: NextRequest) {
   const params = searchParams.toString();
 
   try {
-    const res = await fetch(`${SCRIPT_URL}?${params}`);
+    const res = await fetch(`${SCRIPT_URL}?${params}`, { cache: 'no-store' });
+    if (!res.ok) {
+      return NextResponse.json({ error: `Apps Script returned ${res.status}` }, { status: 502 });
+    }
     const data = await res.json();
     return NextResponse.json(data);
   } catch (e: any) {
@@ -30,7 +33,11 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
+      cache: 'no-store',
     });
+    if (!res.ok) {
+      return NextResponse.json({ error: `Apps Script returned ${res.status}` }, { status: 502 });
+    }
     const data = await res.json();
     return NextResponse.json(data);
   } catch (e: any) {

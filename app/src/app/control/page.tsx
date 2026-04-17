@@ -77,38 +77,36 @@ function saveProjects(p: Project[]) {
 // ── API ───────────────────────────────────────────────────────
 async function apiGet(params: string): Promise<any> {
   const res = await fetch(`/api/sheets?${params}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data;
 }
-async function apiPost(body: object) {
-  if (!SCRIPT_URL) return;
-  try {
-    await fetch('/api/sheets', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-  } catch {}
+
+// Returns { ok: true } or throws on error
+async function apiPost(body: object): Promise<{ ok: boolean }> {
+  const res = await fetch('/api/sheets', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  return { ok: true };
 }
 
 async function fetchTasksRemote(date: string): Promise<Task[] | null> {
-  if (!SCRIPT_URL) return null;
   try {
     const d = await apiGet(`action=getTasks&date=${date}`);
     return Array.isArray(d) && d.length > 0 ? d : null;
   } catch { return null; }
 }
 async function fetchProjectsRemote(): Promise<Project[] | null> {
-  if (!SCRIPT_URL) return null;
   try {
     const d = await apiGet('action=getProjects');
     return Array.isArray(d) && d.length > 0 ? d : null;
   } catch { return null; }
 }
 async function fetchCategoriesRemote(): Promise<Category[] | null> {
-  if (!SCRIPT_URL) return null;
   try {
     const d = await apiGet('action=getCategories');
     return Array.isArray(d) && d.length > 0 ? d : null;
@@ -148,35 +146,24 @@ function TaskCard({ task, cats, onToggle, onUpdate, onDelete }: {
   const titleRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) titleRef.current?.focus(); }, [editing]);
-
-  // Reset local state when task prop changes
   useEffect(() => {
-    setVal(task.title);
-    setCat(task.category);
-    setDesc(task.description ?? '');
+    setVal(task.title); setCat(task.category); setDesc(task.description ?? '');
   }, [task.title, task.category, task.description]);
 
   const openEdit = () => {
     if (task.done) return;
-    setVal(task.title);
-    setCat(task.category);
-    setDesc(task.description ?? '');
-    setEditing(true);
-    setExpanded(true);
+    setVal(task.title); setCat(task.category); setDesc(task.description ?? '');
+    setEditing(true); setExpanded(true);
   };
-
   const commit = () => {
     setEditing(false);
     const t = val.trim();
     if (t) onUpdate(t, cat, desc);
     else { setVal(task.title); setCat(task.category); setDesc(task.description ?? ''); }
   };
-
   const cancel = () => {
     setEditing(false);
-    setVal(task.title);
-    setCat(task.category);
-    setDesc(task.description ?? '');
+    setVal(task.title); setCat(task.category); setDesc(task.description ?? '');
   };
 
   const catObj = cats.find(c => c.key === task.category);
@@ -185,91 +172,47 @@ function TaskCard({ task, cats, onToggle, onUpdate, onDelete }: {
 
   return (
     <div style={{ ...card, marginBottom: 8, opacity: task.done ? 0.45 : 1, transition: 'opacity 0.2s' }}>
-      {/* Main row */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 20px' }}>
         <div style={{ width: 4, borderRadius: 4, background: color, flexShrink: 0, alignSelf: 'stretch', minHeight: 36 }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p
-            onClick={openEdit}
-            style={{
-              fontFamily: font, fontSize: 15, fontWeight: 500, color: '#111',
-              cursor: task.done ? 'default' : 'pointer',
-              textDecoration: task.done ? 'line-through' : 'none',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}
-          >
+          <p onClick={openEdit} style={{ fontFamily: font, fontSize: 15, fontWeight: 500, color: '#111', cursor: task.done ? 'default' : 'pointer', textDecoration: task.done ? 'line-through' : 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {task.title}
           </p>
           <p style={{ ...lbl, marginTop: 3 }}>
-            {catObj?.label ?? task.category}
-            {task.deadline ? ` · ${task.deadline}` : ''}
+            {catObj?.label ?? task.category}{task.deadline ? ` · ${task.deadline}` : ''}
           </p>
         </div>
-        {/* expand toggle if has description */}
         {hasDesc && !editing && (
-          <button
-            onClick={() => setExpanded(v => !v)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 12, padding: '4px 6px', flexShrink: 0 }}
-          >
+          <button onClick={() => setExpanded(v => !v)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ccc', fontSize: 12, padding: '4px 6px', flexShrink: 0 }}>
             {expanded ? '▲' : '▼'}
           </button>
         )}
         <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#e0e0e0', fontSize: 14, padding: '4px 6px', flexShrink: 0 }}>✕</button>
-        <button
-          onClick={onToggle}
-          style={{
-            width: 26, height: 26, borderRadius: '50%',
-            border: `2px solid ${task.done ? color : '#e0e0e0'}`,
-            background: task.done ? color : 'transparent',
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            flexShrink: 0, padding: 0, transition: 'all 0.15s',
-          }}
-        >
+        <button onClick={onToggle} style={{ width: 26, height: 26, borderRadius: '50%', border: `2px solid ${task.done ? color : '#e0e0e0'}`, background: task.done ? color : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, padding: 0, transition: 'all 0.15s' }}>
           {task.done && <span style={{ color: '#fff', fontSize: 11, fontWeight: 700 }}>✓</span>}
         </button>
       </div>
 
-      {/* Description (read-only, expanded) */}
       {hasDesc && !editing && expanded && (
         <div style={{ padding: '0 20px 16px 38px' }}>
           <p style={{ fontFamily: font, fontSize: 13, color: '#777', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>{task.description}</p>
         </div>
       )}
 
-      {/* Edit form */}
       {editing && (
-        <div style={{ padding: '0 20px 20px 38px' }} onMouseDown={e => e.stopPropagation()}>
-          <input
-            ref={titleRef}
-            value={val}
-            onChange={e => setVal(e.target.value)}
+        <div style={{ padding: '0 20px 20px 38px' }}>
+          <input ref={titleRef} value={val} onChange={e => setVal(e.target.value)}
             onKeyDown={e => { if (e.key === 'Escape') cancel(); }}
-            style={{ ...inp, marginBottom: 10 }}
-            placeholder="할 일 제목"
-          />
-          <select
-            value={cat}
-            onChange={e => setCat(e.target.value)}
-            style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}
-          >
+            style={{ ...inp, marginBottom: 10 }} placeholder="할 일 제목" />
+          <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
             {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
-          <textarea
-            value={desc}
-            onChange={e => setDesc(e.target.value)}
-            placeholder="상세 설명 (선택)..."
-            rows={3}
-            style={{
-              ...inp, resize: 'vertical', lineHeight: 1.6,
-              marginBottom: 14, minHeight: 80,
-            }}
-          />
+          <textarea value={desc} onChange={e => setDesc(e.target.value)}
+            placeholder="상세 설명 (선택)..." rows={3}
+            style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 14, minHeight: 80 }} />
           <div style={{ display: 'flex', gap: 8 }}>
             <button onClick={cancel} style={{ ...ghostBtn(true), flex: 1 }}>취소</button>
-            <button
-              onClick={commit}
-              style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 999, fontFamily: font, fontSize: 12, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}
-            >저장</button>
+            <button onClick={commit} style={{ flex: 1, padding: '8px', border: 'none', borderRadius: 999, fontFamily: font, fontSize: 12, cursor: 'pointer', background: '#111', color: '#fff', fontWeight: 600 }}>저장</button>
           </div>
         </div>
       )}
@@ -286,44 +229,22 @@ function AddTaskModal({ cats, defaultDate, onAdd, onClose }: {
   const [cat, setCat] = useState(cats[0]?.key ?? '');
   const [deadline, setDeadline] = useState('');
   const [desc, setDesc] = useState('');
-
   const submit = () => {
     if (!title.trim()) return;
-    onAdd({
-      date: defaultDate,
-      title: title.trim(),
-      description: desc.trim(),
-      category: cat,
-      createdAt: new Date().toISOString(),
-      deadline,
-    });
+    onAdd({ date: defaultDate, title: title.trim(), description: desc.trim(), category: cat, createdAt: new Date().toISOString(), deadline });
     onClose();
   };
-
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>할 일 추가</p>
-        <input
-          autoFocus value={title}
-          onChange={e => setTitle(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && submit()}
-          placeholder="할 일 입력..."
-          style={{ ...inp, marginBottom: 10 }}
-        />
+        <input autoFocus value={title} onChange={e => setTitle(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} placeholder="할 일 입력..." style={{ ...inp, marginBottom: 10 }} />
         <select value={cat} onChange={e => setCat(e.target.value)} style={{ ...inp, marginBottom: 10, cursor: 'pointer' }}>
           {cats.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
-        <textarea
-          value={desc}
-          onChange={e => setDesc(e.target.value)}
-          placeholder="상세 설명 (선택)..."
-          rows={3}
-          style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 10, minHeight: 72 }}
-        />
+        <textarea value={desc} onChange={e => setDesc(e.target.value)} placeholder="상세 설명 (선택)..." rows={3}
+          style={{ ...inp, resize: 'vertical', lineHeight: 1.6, marginBottom: 10, minHeight: 72 }} />
         <p style={{ ...lbl, marginBottom: 6 }}>마감일 (선택)</p>
         <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={{ ...inp, marginBottom: 24 }} />
         <div style={{ display: 'flex', gap: 10 }}>
@@ -350,10 +271,8 @@ function AddProjectModal({ cats, onAdd, onClose }: {
     onClose();
   };
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
+    <div style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ background: '#fff', borderRadius: 20, padding: '32px 28px', width: 360, boxShadow: '0 12px 48px rgba(0,0,0,0.12)' }}>
         <p style={{ ...ttl, fontSize: 17, marginBottom: 20 }}>진행 중 추가</p>
         <input autoFocus value={name} onChange={e => setName(e.target.value)} placeholder="항목 이름..." style={{ ...inp, marginBottom: 10 }} />
@@ -362,8 +281,7 @@ function AddProjectModal({ cats, onAdd, onClose }: {
         </select>
         <div style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-            <p style={lbl}>진행률</p>
-            <p style={{ ...lbl, color: '#555', fontWeight: 600 }}>{progress}%</p>
+            <p style={lbl}>진행률</p><p style={{ ...lbl, color: '#555', fontWeight: 600 }}>{progress}%</p>
           </div>
           <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} style={{ width: '100%', accentColor: '#111' }} />
         </div>
@@ -382,10 +300,25 @@ function AddProjectModal({ cats, onAdd, onClose }: {
 function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
   cats: Category[];
   onUpdate: (key: string, field: 'label' | 'color', val: string) => void;
-  onAdd: () => void;
-  onDelete: (key: string) => void;
-  onClose: () => void;
+  onAdd: () => void; onDelete: (key: string) => void; onClose: () => void;
 }) {
+  const [pingResult, setPingResult] = useState('');
+  const [pinging, setPinging] = useState(false);
+
+  const doPing = async () => {
+    setPinging(true); setPingResult('');
+    try {
+      const res = await fetch('/api/sheets?action=ping');
+      const data = await res.json();
+      if (data.error) setPingResult(`오류: ${data.error}`);
+      else setPingResult(`연결됨 ✓  시트: ${(data.sheets ?? []).join(', ') || '없음'}`);
+    } catch (e: any) {
+      setPingResult(`실패: ${e.message}`);
+    } finally {
+      setPinging(false);
+    }
+  };
+
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 200 }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 300, background: '#fff', borderLeft: '1px solid #ebebeb', padding: '36px 24px', display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,0.07)', overflowY: 'auto' }}>
@@ -393,20 +326,28 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
           <p style={{ ...ttl, fontSize: 16 }}>설정</p>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#bbb', fontSize: 18 }}>✕</button>
         </div>
+
+        {/* Connection test */}
+        <div style={{ marginBottom: 28, padding: '16px', background: '#f8f8f6', borderRadius: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: pingResult ? 10 : 0 }}>
+            <p style={{ ...lbl, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sheets 연결</p>
+            <button onClick={doPing} disabled={pinging} style={{ ...ghostBtn(true), fontSize: 11 }}>
+              {pinging ? '확인 중...' : '테스트'}
+            </button>
+          </div>
+          {pingResult && (
+            <p style={{ fontFamily: font, fontSize: 12, color: pingResult.startsWith('연결됨') ? '#22c55e' : '#ef4444', marginTop: 8, lineHeight: 1.5 }}>{pingResult}</p>
+          )}
+        </div>
+
         <p style={{ ...lbl, marginBottom: 16, textTransform: 'uppercase', letterSpacing: '0.08em' }}>카테고리 관리</p>
         {cats.map(c => (
           <div key={c.key} style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <input
-                type="color" value={c.color}
-                onChange={e => onUpdate(c.key, 'color', e.target.value)}
-                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e5e5e5', cursor: 'pointer', padding: 2, flexShrink: 0 }}
-              />
-              <input
-                value={c.label}
-                onChange={e => onUpdate(c.key, 'label', e.target.value)}
-                style={{ ...inp, padding: '8px 12px', fontSize: 13, flex: 1 }}
-              />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input type="color" value={c.color} onChange={e => onUpdate(c.key, 'color', e.target.value)}
+                style={{ width: 28, height: 28, borderRadius: '50%', border: '1px solid #e5e5e5', cursor: 'pointer', padding: 2, flexShrink: 0 }} />
+              <input value={c.label} onChange={e => onUpdate(c.key, 'label', e.target.value)}
+                style={{ ...inp, padding: '8px 12px', fontSize: 13, flex: 1 }} />
               <button onClick={() => onDelete(c.key)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ddd', fontSize: 16, padding: '4px', flexShrink: 0 }}>✕</button>
             </div>
           </div>
@@ -415,9 +356,7 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
           + 카테고리 추가
         </button>
         <div style={{ flex: 1 }} />
-        <p style={{ ...lbl, fontSize: 10, textAlign: 'center' as const, lineHeight: 1.6 }}>
-          카테고리는 로컬 및 Sheets에 자동 저장됩니다
-        </p>
+        <p style={{ ...lbl, fontSize: 10, textAlign: 'center' as const, lineHeight: 1.6 }}>카테고리는 로컬 및 Sheets에 자동 저장됩니다</p>
       </div>
     </div>
   );
@@ -426,15 +365,13 @@ function SettingsPanel({ cats, onUpdate, onAdd, onDelete, onClose }: {
 // ── MonthBar ──────────────────────────────────────────────────
 function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
   year: number; month: number; selectedYMD: string;
-  cats: Category[];
-  onDayClick: (date: Date) => void;
+  cats: Category[]; onDayClick: (date: Date) => void;
 }) {
   const days = getDaysInMonth(year, month);
   const allTasks = loadAllTasks();
   const todayYMD = toYMD(new Date());
   const prefix = `${year}-${String(month+1).padStart(2,'0')}`;
   const catMap = Object.fromEntries(cats.map(c => [c.key, c.color]));
-
   const counts = Array.from({ length: days }, (_, i) => {
     const ds = `${prefix}-${String(i+1).padStart(2,'0')}`;
     return (allTasks[ds] ?? []).filter(t => !t.done).length;
@@ -445,9 +382,7 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
   return (
     <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#f8f8f6', borderTop: '1px solid #ebebeb' }}>
       <div style={{ padding: '10px 4vw 16px' }}>
-        <p style={{ ...lbl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          {MONTH_NAMES[month]} {year}
-        </p>
+        <p style={{ ...lbl, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{MONTH_NAMES[month]} {year}</p>
         <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end' }}>
           {Array.from({ length: days }, (_, i) => {
             const day = i + 1;
@@ -456,10 +391,7 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
             const activeTasks = dayTasks.filter(t => !t.done);
             const isSel = dateStr === selectedYMD;
             const isToday = dateStr === todayYMD;
-            const barH = activeTasks.length === 0
-              ? 4
-              : Math.max(8, Math.round((activeTasks.length / maxCount) * BAR_MAX));
-
+            const barH = activeTasks.length === 0 ? 4 : Math.max(8, Math.round((activeTasks.length / maxCount) * BAR_MAX));
             return (
               <button key={day} onClick={() => onDayClick(new Date(year, month, day))}
                 title={`${month+1}/${day} — ${dayTasks.length}개`}
@@ -472,13 +404,7 @@ function MonthBar({ year, month, selectedYMD, cats, onDayClick }: {
                       ))
                   }
                 </div>
-                <span style={{
-                  fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
-                  color: isSel ? '#111' : isToday ? '#555' : '#ccc',
-                  fontWeight: isSel || isToday ? 700 : 400,
-                  borderBottom: isSel ? '1.5px solid #111' : '1.5px solid transparent',
-                  paddingBottom: 1,
-                }}>{day}</span>
+                <span style={{ fontFamily: font, fontSize: 9, fontVariantNumeric: 'tabular-nums', lineHeight: 1, color: isSel ? '#111' : isToday ? '#555' : '#ccc', fontWeight: isSel || isToday ? 700 : 400, borderBottom: isSel ? '1.5px solid #111' : '1.5px solid transparent', paddingBottom: 1 }}>{day}</span>
               </button>
             );
           })}
@@ -501,6 +427,25 @@ export default function DashboardPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddTask, setShowAddTask] = useState(false);
   const [showAddProject, setShowAddProject] = useState(false);
+  // Sync status: idle | syncing | ok | fail
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'fail'>('idle');
+  const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const setSyncAndReset = (s: 'ok' | 'fail') => {
+    setSyncState(s);
+    if (syncTimer.current) clearTimeout(syncTimer.current);
+    syncTimer.current = setTimeout(() => setSyncState('idle'), 2500);
+  };
+
+  const syncPost = async (body: object) => {
+    setSyncState('syncing');
+    try {
+      await apiPost(body);
+      setSyncAndReset('ok');
+    } catch {
+      setSyncAndReset('fail');
+    }
+  };
 
   // Auth
   useEffect(() => {
@@ -510,7 +455,7 @@ export default function DashboardPage() {
     setReady(true);
   }, []);
 
-  // Init: load local data instantly, then sync from Sheets
+  // Init
   useEffect(() => {
     if (!authed) return;
     const localCats = loadCategories();
@@ -524,7 +469,7 @@ export default function DashboardPage() {
     setGoal(localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '');
   }, [authed]);
 
-  // Tasks: show local instantly, then sync
+  // Tasks per date
   useEffect(() => {
     if (!authed) return;
     const selYMD = toYMD(sel);
@@ -539,7 +484,7 @@ export default function DashboardPage() {
     setCats(prev => {
       const updated = prev.map(c => c.key === key ? { ...c, [field]: val } : c);
       saveCategories(updated); applyCSS(updated);
-      apiPost({ action: 'saveCategories', categories: updated });
+      syncPost({ action: 'saveCategories', categories: updated });
       return updated;
     });
   };
@@ -551,7 +496,7 @@ export default function DashboardPage() {
     setCats(prev => {
       const updated = [...prev, newCat];
       saveCategories(updated); applyCSS(updated);
-      apiPost({ action: 'saveCategories', categories: updated });
+      syncPost({ action: 'saveCategories', categories: updated });
       return updated;
     });
   };
@@ -559,62 +504,53 @@ export default function DashboardPage() {
     setCats(prev => {
       const updated = prev.filter(c => c.key !== key);
       saveCategories(updated);
-      apiPost({ action: 'saveCategories', categories: updated });
+      syncPost({ action: 'saveCategories', categories: updated });
       return updated;
     });
   };
 
   // Task handlers
-  const handleToggle = async (task: Task) => {
-    setTasks(prev => {
-      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done: !t.done } : t);
-      saveTasks(toYMD(sel), u); return u;
-    });
-    await apiPost({ action: 'updateTask', createdAt: task.createdAt, done: !task.done });
+  const handleToggle = (task: Task) => {
+    const done = !task.done;
+    setTasks(prev => { const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done } : t); saveTasks(toYMD(sel), u); return u; });
+    syncPost({ action: 'updateTask', createdAt: task.createdAt, done });
   };
-  const handleUpdate = async (task: Task, title: string, category: string, description: string) => {
-    setTasks(prev => {
-      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category, description } : t);
-      saveTasks(toYMD(sel), u); return u;
-    });
-    await apiPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description });
+  const handleUpdate = (task: Task, title: string, category: string, description: string) => {
+    setTasks(prev => { const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category, description } : t); saveTasks(toYMD(sel), u); return u; });
+    syncPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description });
   };
-  const handleDelete = async (task: Task) => {
-    setTasks(prev => {
-      const u = prev.filter(t => t.createdAt !== task.createdAt);
-      saveTasks(toYMD(sel), u); return u;
-    });
-    await apiPost({ action: 'deleteTask', createdAt: task.createdAt });
+  const handleDelete = (task: Task) => {
+    setTasks(prev => { const u = prev.filter(t => t.createdAt !== task.createdAt); saveTasks(toYMD(sel), u); return u; });
+    syncPost({ action: 'deleteTask', createdAt: task.createdAt });
   };
-  const handleAdd = async (newTask: Omit<Task, 'done'>) => {
+  const handleAdd = (newTask: Omit<Task, 'done'>) => {
     const task: Task = { ...newTask, done: false };
-    setTasks(prev => {
-      const u = [...prev, task];
-      saveTasks(newTask.date, u); return u;
-    });
-    await apiPost({ action: 'addTask', ...task });
+    setTasks(prev => { const u = [...prev, task]; saveTasks(newTask.date, u); return u; });
+    syncPost({ action: 'addTask', ...task });
   };
 
   // Project handlers
-  const handleAddProject = async (p: Project) => {
+  const handleAddProject = (p: Project) => {
     const u = [...projects, p]; setProjects(u); saveProjects(u);
-    await apiPost({ action: 'addProject', ...p });
+    syncPost({ action: 'addProject', ...p });
   };
-  const handleDeleteProject = async (id: string) => {
+  const handleDeleteProject = (id: string) => {
     const u = projects.filter(p => p.id !== id); setProjects(u); saveProjects(u);
-    await apiPost({ action: 'deleteProject', id });
+    syncPost({ action: 'deleteProject', id });
   };
 
-  const saveGoal = () => {
-    localStorage.setItem(`${GOAL_KEY}_${toYMD(new Date())}`, goal);
-    setGoalEditing(false);
-  };
+  const saveGoal = () => { localStorage.setItem(`${GOAL_KEY}_${toYMD(new Date())}`, goal); setGoalEditing(false); };
   const logout = () => { sessionStorage.removeItem(SESSION_KEY); window.location.replace('/'); };
 
   if (!ready || !authed) return null;
 
   const selYMD = toYMD(sel);
   const todayYMD = toYMD(new Date());
+
+  const syncDot = syncState === 'syncing' ? '#facc15'
+    : syncState === 'ok' ? '#22c55e'
+    : syncState === 'fail' ? '#ef4444'
+    : '#22c55e'; // idle = green (connected)
 
   return (
     <>
@@ -629,6 +565,8 @@ export default function DashboardPage() {
         input[type="color"]::-webkit-color-swatch-wrapper{padding:0;}
         input[type="color"]::-webkit-color-swatch{border:none;border-radius:50%;}
         input[type="range"]{accent-color:#111;}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+        .syncing{animation:pulse 1s ease-in-out infinite;}
       `}</style>
 
       <main style={{ background: '#f8f8f6', minHeight: '100vh', fontFamily: font, paddingBottom: 140 }}>
@@ -640,8 +578,9 @@ export default function DashboardPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                 <span style={{ fontSize: 11, color: '#ccc', letterSpacing: '0.14em', textTransform: 'uppercase' }}>filum</span>
                 <div
-                  style={{ width: 6, height: 6, borderRadius: '50%', background: SCRIPT_URL ? '#22c55e' : '#eab308' }}
-                  title={SCRIPT_URL ? 'Sheets 연결됨' : '로컬 저장 중'}
+                  className={syncState === 'syncing' ? 'syncing' : ''}
+                  style={{ width: 6, height: 6, borderRadius: '50%', background: syncDot, transition: 'background 0.3s' }}
+                  title={syncState === 'syncing' ? '동기화 중...' : syncState === 'fail' ? '동기화 실패' : 'Sheets 연결됨'}
                 />
               </div>
               <h1 style={{ fontSize: 'clamp(38px,5vw,64px)', fontWeight: 800, color: '#111', lineHeight: 1.02, letterSpacing: '-0.03em', fontFamily: font }}>

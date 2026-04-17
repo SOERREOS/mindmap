@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'edge';
 
-const URL  = process.env.SUPABASE_URL!;
-const KEY  = process.env.SUPABASE_ANON_KEY!;
+const SUPA_URL = process.env.SUPABASE_URL!;
+const KEY      = process.env.SUPABASE_ANON_KEY!;
 
 function hdrs(extras: Record<string, string> = {}) {
   return {
@@ -16,7 +16,7 @@ function hdrs(extras: Record<string, string> = {}) {
 }
 
 async function sb(path: string, init: RequestInit = {}): Promise<any> {
-  const res = await fetch(`${URL}/rest/v1/${path}`, {
+  const res = await fetch(`${SUPA_URL}/rest/v1/${path}`, {
     ...init,
     headers: hdrs(init.headers as Record<string, string>),
   });

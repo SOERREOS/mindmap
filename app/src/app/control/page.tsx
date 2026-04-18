@@ -807,7 +807,7 @@ export default function DashboardPage() {
         .dash-pad{padding:48px 6vw 0;}
         .dash-day-btn{flex:1;}
         .dash-month-scroll{display:flex;gap:2px;align-items:flex-end;}
-        .dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+        .dash-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;min-width:0;}
         @media(max-width:640px){
           .dash-pad{padding:28px 5vw 0 !important;}
           .dash-sheet-overlay{align-items:flex-end !important;}
@@ -906,7 +906,7 @@ export default function DashboardPage() {
                     const catObj = cats.find(c => c.key === p.category);
                     const color = catObj?.color ?? '#888';
                     return (
-                      <div key={p.id} style={{ background: color, borderRadius: 16, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', minHeight: 110 }}>
+                      <div key={p.id} style={{ background: color, borderRadius: 16, padding: '14px 14px 12px', display: 'flex', flexDirection: 'column', minHeight: 110, minWidth: 0, overflow: 'hidden' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                           <p style={{ fontFamily: font, fontSize: 14, fontWeight: 600, color: '#fff', lineHeight: 1.3,
                             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1, marginRight: 6 }}>
@@ -926,7 +926,7 @@ export default function DashboardPage() {
                             onMouseUp={e => handleSyncProjectProgress(p.id, Number((e.target as HTMLInputElement).value))}
                             onTouchEnd={e => handleSyncProjectProgress(p.id, Number((e.target as HTMLInputElement).value))}
                             onClick={e => e.stopPropagation()}
-                            style={{ flex: 1, accentColor: 'rgba(255,255,255,0.85)', height: 3, cursor: 'pointer' }} />
+                            style={{ flex: 1, minWidth: 0, accentColor: 'rgba(255,255,255,0.85)', height: 3, cursor: 'pointer' }} />
                           <span style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.75)', fontVariantNumeric: 'tabular-nums', flexShrink: 0, minWidth: 26, textAlign: 'right' as const }}>{p.progress}%</span>
                           <button onClick={() => handleDeleteProject(p.id)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.4)', fontSize: 13, padding: 0, lineHeight: 1, flexShrink: 0 }}>✕</button>

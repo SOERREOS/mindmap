@@ -18,7 +18,7 @@ interface Task {
 }
 interface Project {
   id: string; name: string; progress: number;
-  category: string; deadline: string; memo: string;
+  category: string; startDate?: string; deadline: string; memo: string;
 }
 
 // ── Defaults ──────────────────────────────────────────────────
@@ -120,6 +120,13 @@ async function fetchAllTasksRemote(): Promise<Record<string, Task[]> | null> {
     return grouped;
   } catch { return null; }
 }
+async function fetchGoalRemote(date: string): Promise<string | null> {
+  try {
+    const d = await apiGet(`action=getGoal&date=${encodeURIComponent(date)}`);
+    return typeof d?.text === 'string' ? d.text : null;
+  } catch { return null; }
+}
+
 async function fetchProjectsRemote(): Promise<Project[] | null> {
   try {
     const d = await apiGet('action=getProjects');
@@ -210,22 +217,62 @@ function TaskCard({ task, cats, onToggle, onEdit, onDelete }: {
 // ── EditTaskModal ─────────────────────────────────────────────
 function EditTaskModal({ task, cats, onUpdate, onClose }: {
   task: Task; cats: Category[];
-  onUpdate: (title: string, cat: string, description: string) => void;
+  onUpdate: (title: string, cat: string, description: string, date: string, deadline: string) => void;
   onClose: () => void;
 }) {
   const [val, setVal] = useState(task.title);
   const [cat, setCat] = useState(task.category);
   const [desc, setDesc] = useState(task.description ?? '');
+  const isRange = !!(task.deadline && task.deadline > task.date);
+  const [rangeMode, setRangeMode] = useState(isRange);
+  const [startDate, setStartDate] = useState(task.date);
+  const [endDate, setEndDate] = useState(task.deadline || task.date);
+
+  const tabBtn = (active: boolean): React.CSSProperties => ({
+    flex: 1, padding: '8px', border: 'none', borderRadius: 10,
+    fontFamily: font, fontSize: 13, cursor: 'pointer',
+    background: active ? '#111' : 'transparent', color: active ? '#fff' : '#aaa', fontWeight: active ? 600 : 400,
+  });
+
   const commit = () => {
     const t = val.trim();
-    if (t) onUpdate(t, cat, desc);
+    if (!t) return;
+    const date = startDate;
+    const deadline = rangeMode ? endDate : '';
+    onUpdate(t, cat, desc, date, deadline);
     onClose();
   };
   return (
     <div className="dash-sheet-overlay" style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.12)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="dash-sheet-box" style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', width: 380, boxShadow: '0 12px 48px rgba(0,0,0,0.18)' }}>
+      <div className="dash-sheet-box" style={{ background: 'var(--surface)', borderRadius: 20, padding: '28px 24px', width: 400, boxShadow: '0 12px 48px rgba(0,0,0,0.18)' }}>
         <p style={{ ...ttl, fontSize: 16, marginBottom: 16 }}>할 일 수정</p>
+
+        {/* 당일 / 기간 토글 */}
+        <div style={{ display: 'flex', background: 'var(--tab-bg)', borderRadius: 12, padding: 4, marginBottom: 12 }}>
+          <button style={tabBtn(!rangeMode)} onClick={() => setRangeMode(false)}>당일</button>
+          <button style={tabBtn(rangeMode)} onClick={() => setRangeMode(true)}>기간 설정</button>
+        </div>
+
+        {/* 날짜 */}
+        {rangeMode ? (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...lbl, marginBottom: 5 }}>시작일</p>
+              <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inp }} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <p style={{ ...lbl, marginBottom: 5 }}>마감일</p>
+              <input type="date" value={endDate} min={startDate} onChange={e => setEndDate(e.target.value)} style={{ ...inp }} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ marginBottom: 12 }}>
+            <p style={{ ...lbl, marginBottom: 5 }}>날짜</p>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inp }} />
+          </div>
+        )}
+
         <input autoFocus value={val} onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') onClose(); }}
           style={{ ...inp, marginBottom: 10 }} placeholder="할 일 제목" />
@@ -320,11 +367,12 @@ function AddProjectModal({ cats, onAdd, onClose }: {
   const [name, setName] = useState('');
   const [cat, setCat] = useState(cats[0]?.key ?? '');
   const [progress, setProgress] = useState(0);
+  const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
   const ok = name.trim() && deadline;
   const submit = () => {
     if (!ok) return;
-    onAdd({ id: new Date().toISOString(), name: name.trim(), category: cat, progress, deadline, memo: '' });
+    onAdd({ id: new Date().toISOString(), name: name.trim(), category: cat, progress, startDate: startDate || undefined, deadline, memo: '' });
     onClose();
   };
   return (
@@ -342,8 +390,16 @@ function AddProjectModal({ cats, onAdd, onClose }: {
           </div>
           <input type="range" min={0} max={100} value={progress} onChange={e => setProgress(Number(e.target.value))} style={{ width: '100%', accentColor: '#111' }} />
         </div>
-        <p style={{ ...lbl, marginBottom: 6 }}>마감일</p>
-        <input type="date" value={deadline} onChange={e => setDeadline(e.target.value)} style={{ ...inp, marginBottom: 24 }} />
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
+          <div style={{ flex: 1 }}>
+            <p style={{ ...lbl, marginBottom: 6 }}>시작일 (선택)</p>
+            <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={{ ...inp }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <p style={{ ...lbl, marginBottom: 6 }}>마감일</p>
+            <input type="date" value={deadline} min={startDate || undefined} onChange={e => setDeadline(e.target.value)} style={{ ...inp }} />
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button onClick={onClose} style={{ flex: 1, padding: '13px', border: '1px solid #e5e5e5', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: 'pointer', background: 'var(--cancel-bg)', color: 'var(--cancel-col)' }}>취소</button>
           <button onClick={submit} disabled={!ok} style={{ flex: 1, padding: '13px', border: 'none', borderRadius: 12, fontFamily: font, fontSize: 14, cursor: ok ? 'pointer' : 'default', background: ok ? '#111' : '#e5e5e5', color: ok ? '#fff' : '#aaa', fontWeight: 600 }}>추가</button>
@@ -577,7 +633,14 @@ export default function DashboardPage() {
     setProjects(loadProjects());
     fetchProjectsRemote().then(remote => { if (remote) { setProjects(remote); saveProjects(remote); } });
     const today = new Date(); setSel(today);
-    setGoal(localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '');
+    const localGoal = localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '';
+    setGoal(localGoal);
+    fetchGoalRemote(toYMD(today)).then(text => {
+      if (text !== null) {
+        setGoal(text);
+        localStorage.setItem(`${GOAL_KEY}_${toYMD(today)}`, text);
+      }
+    });
 
     // 전체 task 한 번에 로드
     const localAll = loadAllTasks();
@@ -631,32 +694,37 @@ export default function DashboardPage() {
   // Task handlers
   const handleToggle = (task: Task) => {
     const done = !task.done;
-    const d = toYMD(sel);
-    setTasks(prev => {
-      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, done } : t);
-      saveTasks(d, u);
-      setAllTasks(a => { const n = { ...a, [d]: u }; saveAllTasks(n); return n; });
-      return u;
+    setAllTasks(a => {
+      const bucket = (a[task.date] ?? []).map(t => t.createdAt === task.createdAt ? { ...t, done } : t);
+      const n = { ...a, [task.date]: bucket };
+      saveAllTasks(n);
+      return n;
     });
     syncPost({ action: 'updateTask', createdAt: task.createdAt, done });
   };
-  const handleUpdate = (task: Task, title: string, category: string, description: string) => {
-    const d = toYMD(sel);
-    setTasks(prev => {
-      const u = prev.map(t => t.createdAt === task.createdAt ? { ...t, title, category, description } : t);
-      saveTasks(d, u);
-      setAllTasks(a => { const n = { ...a, [d]: u }; saveAllTasks(n); return n; });
-      return u;
+  const handleUpdate = (task: Task, title: string, category: string, description: string, date: string, deadline: string) => {
+    const updatedTask = { ...task, title, category, description, date, deadline };
+    setAllTasks(a => {
+      const oldBucket = (a[task.date] ?? []).filter(t => t.createdAt !== task.createdAt);
+      let n: Record<string, Task[]>;
+      if (task.date === date) {
+        const newBucket = [...oldBucket, updatedTask].sort((x, y) => x.createdAt.localeCompare(y.createdAt));
+        n = { ...a, [task.date]: newBucket };
+      } else {
+        const newBucket = [...(a[date] ?? []), updatedTask];
+        n = { ...a, [task.date]: oldBucket, [date]: newBucket };
+      }
+      saveAllTasks(n);
+      return n;
     });
-    syncPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description });
+    syncPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description, date, deadline });
   };
   const handleDelete = (task: Task) => {
-    const d = toYMD(sel);
-    setTasks(prev => {
-      const u = prev.filter(t => t.createdAt !== task.createdAt);
-      saveTasks(d, u);
-      setAllTasks(a => { const n = { ...a, [d]: u }; saveAllTasks(n); return n; });
-      return u;
+    setAllTasks(a => {
+      const bucket = (a[task.date] ?? []).filter(t => t.createdAt !== task.createdAt);
+      const n = { ...a, [task.date]: bucket };
+      saveAllTasks(n);
+      return n;
     });
     syncPost({ action: 'deleteTask', createdAt: task.createdAt });
   };
@@ -691,7 +759,12 @@ export default function DashboardPage() {
     syncPost({ action: 'updateProject', id, progress });
   };
 
-  const saveGoal = () => { localStorage.setItem(`${GOAL_KEY}_${toYMD(new Date())}`, goal); setGoalEditing(false); };
+  const saveGoal = () => {
+    const today = toYMD(new Date());
+    localStorage.setItem(`${GOAL_KEY}_${today}`, goal);
+    syncPost({ action: 'saveGoal', date: today, text: goal });
+    setGoalEditing(false);
+  };
   const logout = () => { sessionStorage.removeItem(SESSION_KEY); window.location.replace('/'); };
 
   if (!ready || !authed) return null;
@@ -721,7 +794,7 @@ export default function DashboardPage() {
           --cancel-bg:#252525;--cancel-col:#888888;--tab-bg:#252525;
         }
         *{box-sizing:border-box;margin:0;padding:0;}
-        body{background:var(--bg);transition:background 0.2s;overflow:auto !important;}
+        body{background:var(--bg);transition:background 0.2s;overflow-x:hidden !important;overflow-y:auto !important;}
         ::-webkit-scrollbar{width:0;height:0;}
         input,select,textarea{color:var(--text) !important;background:var(--input-bg) !important;font-family:${font};}
         input::placeholder,textarea::placeholder{color:var(--muted) !important;}
@@ -843,7 +916,10 @@ export default function DashboardPage() {
                             {dday >= 0 ? `D-${dday}` : `D+${Math.abs(dday)}`}
                           </p>
                         </div>
-                        <p style={{ fontFamily: font, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 'auto', paddingBottom: 10 }}>{catObj?.label ?? p.category}</p>
+                        <p style={{ fontFamily: font, fontSize: 11, color: 'rgba(255,255,255,0.7)', marginBottom: 4 }}>{catObj?.label ?? p.category}</p>
+                        <p style={{ fontFamily: font, fontSize: 10, color: 'rgba(255,255,255,0.6)', marginBottom: 'auto', paddingBottom: 8 }}>
+                          {p.startDate ? `${p.startDate.slice(5)} → ${p.deadline.slice(5)}` : `~ ${p.deadline.slice(5)}`}
+                        </p>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <input type="range" min={0} max={100} value={p.progress}
                             onChange={e => handleUpdateProjectProgress(p.id, Number(e.target.value))}
@@ -871,7 +947,7 @@ export default function DashboardPage() {
       {showAddProject && <AddProjectModal cats={cats} onAdd={handleAddProject} onClose={() => setShowAddProject(false)} />}
       {editingTask && (
         <EditTaskModal task={editingTask} cats={cats}
-          onUpdate={(title, cat, description) => { handleUpdate(editingTask, title, cat, description); setEditingTask(null); }}
+          onUpdate={(title, cat, description, date, deadline) => { handleUpdate(editingTask, title, cat, description, date, deadline); setEditingTask(null); }}
           onClose={() => setEditingTask(null)} />
       )}
     </>

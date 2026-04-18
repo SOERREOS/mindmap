@@ -59,6 +59,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(rows ?? []);
     }
 
+    if (action === 'getGoal') {
+      const date = p.get('date');
+      if (!date) throw new Error('date required');
+      const rows = await sb(`goals?date=eq.${encodeURIComponent(date)}&select=text`);
+      return NextResponse.json({ text: rows?.[0]?.text ?? '' });
+    }
+
     return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -112,6 +119,24 @@ export async function POST(req: NextRequest) {
       await sb(`projects?id=eq.${encodeURIComponent(rest.id)}`, {
         method: 'DELETE',
         headers: { Prefer: 'return=minimal' },
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'updateProject') {
+      const { id, ...fields } = rest;
+      await sb(`projects?id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(fields),
+      });
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === 'saveGoal') {
+      await sb('goals', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ date: rest.date, text: rest.text }),
       });
       return NextResponse.json({ ok: true });
     }

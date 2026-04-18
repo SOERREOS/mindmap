@@ -919,7 +919,18 @@ export default function DashboardPage() {
       if (remote) { setCats(remote); applyCSS(remote); saveCategories(remote); }
     });
     setProjects(loadProjects());
-    fetchProjectsRemote().then(remote => { if (remote) { setProjects(remote); saveProjects(remote); } });
+    fetchProjectsRemote().then(remote => {
+      if (remote) {
+        // remote 로딩 전에 로컬에서 추가된 항목(race condition)을 보존
+        setProjects(prev => {
+          const remoteIds = new Set(remote.map((p: Project) => p.id));
+          const localOnly = prev.filter(p => !remoteIds.has(p.id));
+          const merged = [...remote, ...localOnly];
+          saveProjects(merged);
+          return merged;
+        });
+      }
+    });
     const today = new Date(); setSel(today);
     const localGoal = localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '';
     setGoal(localGoal);
@@ -936,9 +947,21 @@ export default function DashboardPage() {
     setTasks(getTasksForDate(localAll, toYMD(today)));
     fetchAllTasksRemote().then(all => {
       if (all) {
-        setAllTasks(all);
-        saveAllTasks(all);
-        setTasks(getTasksForDate(all, toYMD(today)));
+        // remote 로딩 전에 로컬에서 추가된 태스크(race condition)를 보존
+        setAllTasks(prev => {
+          const merged: Record<string, Task[]> = { ...all };
+          for (const [date, localTasks] of Object.entries(prev)) {
+            if (!merged[date]) {
+              merged[date] = localTasks;
+            } else {
+              const remoteKeys = new Set(merged[date].map(t => t.createdAt));
+              const localOnly = localTasks.filter(t => !remoteKeys.has(t.createdAt));
+              if (localOnly.length > 0) merged[date] = [...merged[date], ...localOnly];
+            }
+          }
+          saveAllTasks(merged);
+          return merged;
+        });
       }
     });
   }, [authed]);
@@ -1035,22 +1058,34 @@ export default function DashboardPage() {
   };
   const handleAdd = (newTask: Omit<Task, 'done'>) => {
     const task: Task = { ...newTask, done: false };
-    setTasks(prev => {
-      const u = [...prev, task];
-      saveTasks(newTask.date, u);
-      setAllTasks(a => { const n = { ...a, [newTask.date]: u }; saveAllTasks(n); return n; });
-      return u;
+    // allTasks만 업데이트 → tasks는 [sel, allTasks] useEffect가 자동으로 재계산
+    // (setTasks(prev=>) 방식은 getTasksForDate 결과물인 prev에
+    //  다른 날짜 bucket의 range 태스크가 섞여서 복제 버그 유발)
+    setAllTasks(a => {
+      const bucket = [...(a[task.date] ?? []), task];
+      const n = { ...a, [task.date]: bucket };
+      saveAllTasks(n);
+      return n;
     });
     syncPost({ action: 'addTask', ...task });
   };
 
   // Project handlers
   const handleAddProject = (p: Project) => {
-    const u = [...projects, p]; setProjects(u); saveProjects(u);
+    // 함수형 업데이트로 stale closure 방지
+    setProjects(prev => {
+      const u = [...prev, p];
+      saveProjects(u);
+      return u;
+    });
     syncPost({ action: 'addProject', ...p });
   };
   const handleDeleteProject = (id: string) => {
-    const u = projects.filter(p => p.id !== id); setProjects(u); saveProjects(u);
+    setProjects(prev => {
+      const u = prev.filter(p => p.id !== id);
+      saveProjects(u);
+      return u;
+    });
     syncPost({ action: 'deleteProject', id });
   };
   const handleUpdateProjectProgress = (id: string, progress: number) => {

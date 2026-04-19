@@ -42,6 +42,11 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(rows ?? []);
     }
 
+    if (action === 'getDeletedIds') {
+      const rows = await sb('deleted_tasks?select=createdAt');
+      return NextResponse.json((rows ?? []).map((r: any) => r.createdAt));
+    }
+
     if (action === 'getTasks') {
       const date = p.get('date');
       if (!date) throw new Error('date required');
@@ -102,6 +107,11 @@ export async function POST(req: NextRequest) {
       await sb(`tasks?createdAt=eq.${encodeURIComponent(rest.createdAt)}`, {
         method: 'DELETE',
         headers: { Prefer: 'return=minimal' },
+      });
+      await sb('deleted_tasks', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ createdAt: rest.createdAt, deletedAt: new Date().toISOString() }),
       });
       return NextResponse.json({ ok: true });
     }

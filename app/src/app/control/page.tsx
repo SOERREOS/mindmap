@@ -160,6 +160,13 @@ async function fetchGoalRemote(date: string): Promise<string | null> {
   } catch { return null; }
 }
 
+async function fetchDeletedIdsRemote(): Promise<Set<string>> {
+  try {
+    const d = await apiGet('action=getDeletedIds');
+    return new Set(Array.isArray(d) ? d : []);
+  } catch { return new Set(); }
+}
+
 async function fetchProjectsRemote(): Promise<Project[] | null> {
   try {
     const d = await apiGet('action=getProjects');
@@ -952,41 +959,44 @@ export default function DashboardPage() {
       }
     });
 
-    // 전체 task 한 번에 로드
+    // 전체 task + 삭제 이력 병렬 로드
     const localAll = loadAllTasks();
     setAllTasks(localAll);
     setTasks(getTasksForDate(localAll, toYMD(today)));
-    fetchAllTasksRemote().then(all => {
-      if (all) {
-        setAllTasks(prev => {
-          // 로컬 상태가 정답 (날짜 변경·삭제는 이미 로컬에 반영됨)
-          // createdAt -> date 맵 빌드
-          const localByCreatedAt: Record<string, string> = {};
-          for (const [date, tasks] of Object.entries(prev)) {
-            for (const t of tasks) localByCreatedAt[t.createdAt] = date;
-          }
-          const deletedSet = loadDeletedSet();
+    Promise.all([fetchAllTasksRemote(), fetchDeletedIdsRemote()]).then(([all, remoteDeleted]) => {
+      // 로컬 + 원격 삭제 이력 합산 후 로컬에 저장
+      const localDeleted = loadDeletedSet();
+      const deletedSet = new Set([...localDeleted, ...remoteDeleted]);
+      try { localStorage.setItem(DELETED_KEY, JSON.stringify([...deletedSet])); } catch {}
 
-          // 로컬 상태를 기반으로 시작
-          const merged: Record<string, Task[]> = {};
-          for (const [date, tasks] of Object.entries(prev)) {
-            merged[date] = [...tasks];
-          }
+      if (!all) return;
 
-          // 로컬에 없고 삭제 이력도 없는 원격 전용 태스크만 추가 (다른 기기 추가분)
-          for (const [date, remoteTasks] of Object.entries(all)) {
-            for (const t of remoteTasks) {
-              if (!localByCreatedAt[t.createdAt] && !deletedSet.has(t.createdAt)) {
-                if (!merged[date]) merged[date] = [];
-                merged[date].push(t);
-              }
+      setAllTasks(prev => {
+        // 원격에 있는 createdAt 목록
+        const remoteByCreatedAt = new Set<string>();
+        for (const remoteTasks of Object.values(all)) {
+          for (const t of remoteTasks) remoteByCreatedAt.add(t.createdAt);
+        }
+
+        // 원격을 기준으로 시작 (다른 기기 변경사항 반영)
+        const merged: Record<string, Task[]> = {};
+        for (const [date, remoteTasks] of Object.entries(all)) {
+          merged[date] = [...remoteTasks];
+        }
+
+        // 로컬 전용 태스크만 추가 (원격에 없고 삭제 이력도 없는 것 = 아직 동기화 안 된 신규)
+        for (const [date, localTasks] of Object.entries(prev)) {
+          for (const t of localTasks) {
+            if (!remoteByCreatedAt.has(t.createdAt) && !deletedSet.has(t.createdAt)) {
+              if (!merged[date]) merged[date] = [];
+              merged[date].push(t);
             }
           }
+        }
 
-          saveAllTasks(merged);
-          return merged;
-        });
-      }
+        saveAllTasks(merged);
+        return merged;
+      });
     });
   }, [authed]);
 

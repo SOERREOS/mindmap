@@ -73,6 +73,17 @@ function loadAllTasks(): Record<string, Task[]> {
 function saveAllTasks(all: Record<string, Task[]>) {
   try { localStorage.setItem(TASKS_KEY, JSON.stringify(all)); } catch {}
 }
+const DELETED_KEY = 'dashboard_deleted';
+function loadDeletedSet(): Set<string> {
+  try { return new Set(JSON.parse(localStorage.getItem(DELETED_KEY) ?? '[]')); } catch { return new Set(); }
+}
+function addToDeletedSet(createdAt: string) {
+  try {
+    const s = loadDeletedSet();
+    s.add(createdAt);
+    localStorage.setItem(DELETED_KEY, JSON.stringify([...s]));
+  } catch {}
+}
 // 날짜 범위 + 반복 태스크를 고려해 해당 날의 태스크를 반환
 function getTasksForDate(all: Record<string, Task[]>, date: string): Task[] {
   const result: Task[] = [];
@@ -822,11 +833,11 @@ function MonthBar({ year, month, selectedYMD, cats, allTasks, onDayClick, onShow
                 title={`${month+1}/${day} — ${dayTasks.length}개`}
                 className="dash-day-btn"
                 style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', gap: 4, background: 'none', border: 'none', cursor: 'pointer', padding: 0, height: BAR_MAX + 28 }}>
-                <div style={{ width: '100%', height: barH, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', gap: 1 }}>
+                <div style={{ width: '100%', height: barH, borderRadius: 3, overflow: 'hidden', display: 'flex', flexDirection: 'column-reverse', gap: 2, background: 'var(--bg)' }}>
                   {visibleSlices.length === 0
                     ? <div style={{ width: '100%', flex: 1, background: 'var(--border)', borderRadius: 3 }} />
                     : visibleSlices.map((s, ti) => (
-                        <div key={ti} style={{ width: '100%', flex: 1, minHeight: 3, borderRadius: 1,
+                        <div key={ti} style={{ width: '100%', flex: 1, minHeight: 1, borderRadius: 1,
                           background: s.done ? 'transparent' : s.color,
                           border: s.done ? `1px solid ${s.color}` : 'none' }} />
                       ))
@@ -935,7 +946,7 @@ export default function DashboardPage() {
     const localGoal = localStorage.getItem(`${GOAL_KEY}_${toYMD(today)}`) ?? '';
     setGoal(localGoal);
     fetchGoalRemote(toYMD(today)).then(text => {
-      if (text !== null) {
+      if (text) {
         setGoal(text);
         localStorage.setItem(`${GOAL_KEY}_${toYMD(today)}`, text);
       }
@@ -947,18 +958,31 @@ export default function DashboardPage() {
     setTasks(getTasksForDate(localAll, toYMD(today)));
     fetchAllTasksRemote().then(all => {
       if (all) {
-        // remote 로딩 전에 로컬에서 추가된 태스크(race condition)를 보존
         setAllTasks(prev => {
-          const merged: Record<string, Task[]> = { ...all };
-          for (const [date, localTasks] of Object.entries(prev)) {
-            if (!merged[date]) {
-              merged[date] = localTasks;
-            } else {
-              const remoteKeys = new Set(merged[date].map(t => t.createdAt));
-              const localOnly = localTasks.filter(t => !remoteKeys.has(t.createdAt));
-              if (localOnly.length > 0) merged[date] = [...merged[date], ...localOnly];
+          // 로컬 상태가 정답 (날짜 변경·삭제는 이미 로컬에 반영됨)
+          // createdAt -> date 맵 빌드
+          const localByCreatedAt: Record<string, string> = {};
+          for (const [date, tasks] of Object.entries(prev)) {
+            for (const t of tasks) localByCreatedAt[t.createdAt] = date;
+          }
+          const deletedSet = loadDeletedSet();
+
+          // 로컬 상태를 기반으로 시작
+          const merged: Record<string, Task[]> = {};
+          for (const [date, tasks] of Object.entries(prev)) {
+            merged[date] = [...tasks];
+          }
+
+          // 로컬에 없고 삭제 이력도 없는 원격 전용 태스크만 추가 (다른 기기 추가분)
+          for (const [date, remoteTasks] of Object.entries(all)) {
+            for (const t of remoteTasks) {
+              if (!localByCreatedAt[t.createdAt] && !deletedSet.has(t.createdAt)) {
+                if (!merged[date]) merged[date] = [];
+                merged[date].push(t);
+              }
             }
           }
+
           saveAllTasks(merged);
           return merged;
         });
@@ -1048,6 +1072,7 @@ export default function DashboardPage() {
     syncPost({ action: 'updateTask', createdAt: task.createdAt, title, category, description, date, deadline, recurring, recurringUntil });
   };
   const handleDelete = (task: Task) => {
+    addToDeletedSet(task.createdAt);
     setAllTasks(a => {
       const bucket = (a[task.date] ?? []).filter(t => t.createdAt !== task.createdAt);
       const n = { ...a, [task.date]: bucket };
